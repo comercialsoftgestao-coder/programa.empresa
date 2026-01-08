@@ -980,6 +980,12 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                             <span className="font-bold text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span>
                                                         </div>
                                                         <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Expiração</span>
+                                                            <span className={`font-bold ${p.expiration_date ? 'text-slate-700' : 'text-slate-300 italic'}`}>
+                                                                {p.expiration_date ? new Date(p.expiration_date).toLocaleDateString() : '-'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
                                                             <span className="text-slate-400 font-bold">Pagamento</span>
                                                             <span className="font-bold text-slate-700">{p.payment_method || 'Não definido'}</span>
                                                         </div>
