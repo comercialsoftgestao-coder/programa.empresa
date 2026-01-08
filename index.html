@@ -475,7 +475,7 @@
                 if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
                 
                 const value = parseFloat(contractForm.value || project.value || 0);
-                const fineValue = formatCurrency(value * 50); // Multa 50x
+                const fineValue = formatCurrency(value * 20); // Multa 20x
                 
                 const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
                 const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
@@ -494,7 +494,7 @@ CLÁUSULA PRIMEIRA - DO OBJETO
 
 CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
 2.1. Todo o código-fonte, estruturas de banco de dados, design interfaces e demais elementos do SOFTWARE são de propriedade exclusiva e inalienável da CONTRATADA, sendo protegidos pela Lei de Software (Lei nº 9.609/98) e Lei de Direitos Autorais (Lei nº 9.610/98).
-2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, não exclusiva e intransferível.
+2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, exclusiva e intransferível.
 2.3. É ESTRITAMENTE VEDADO à CONTRATANTE:
     a) Vender, revender, alugar, sublicenciar ou ceder o SOFTWARE a terceiros, a título oneroso ou gratuito.
     b) Utilizar o SOFTWARE para criar produtos derivados ou concorrentes (Engenharia Reversa).
@@ -503,7 +503,7 @@ CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
 
 CLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS
 3.1. O descumprimento de qualquer cláusula deste contrato sujeitará a parte infratora ao pagamento de multa compensatória correspondente a 50% (cinquenta por cento) do valor total do contrato.
-3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (CINQUENTA VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).
+3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).
 
 CLÁUSULA QUARTA - DO VALOR E FORMA DE PAGAMENTO
 4.1. Pelos serviços objeto deste contrato, a CONTRATANTE pagará à CONTRATADA o valor total de ${formatCurrency(value)}.
