@@ -772,8 +772,9 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                         </div>
 
                                         <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
-                                            <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas</h3>
+                                            <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas e Avisos</h3>
                                             <div className="space-y-4">
+                                                {/* ALERTA DE PRAZO DE ENTREGA */}
                                                 {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').map(p => (
                                                     <div key={`delay-${p.id}`} onClick={() => openModal('project', p)} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-rose-500/20 transition-colors">
                                                         <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
@@ -783,6 +784,35 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                         </div>
                                                     </div>
                                                 ))}
+
+                                                {/* ALERTA DE EXPIRAÇÃO DE HOSPEDAGEM/CONTRATO (NOVO) */}
+                                                {projects.filter(p => p.expiration_date).map(p => {
+                                                    const days = Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24));
+                                                    if (days < 0) { // Vencido
+                                                        return (
+                                                            <div key={`exp-expired-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-red-900/30 transition-colors">
+                                                                <Icon name="x-circle" className="text-red-500 mt-1" weight="fill"/>
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-red-400">Hospedagem Vencida</p>
+                                                                    <p className="text-xs text-slate-400 mt-1">A renovação de <strong>{p.title}</strong> expirou há {Math.abs(days)} dias.</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    } else if (days <= 30) { // Próximo de vencer
+                                                        return (
+                                                            <div key={`exp-warning-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
+                                                                <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
+                                                                    <p className="text-xs text-slate-400 mt-1">A hospedagem de <strong>{p.title}</strong> vence em {days} dias ({new Date(p.expiration_date).toLocaleDateString()}).</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })}
+
+                                                {/* ALERTA FINANCEIRO */}
                                                 {financial.filter(f => f.status === 'Pendente').map(f => (
                                                     <div key={`fin-${f.id}`} onClick={() => openModal('finance', f)} className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-amber-500/20 transition-colors">
                                                         <Icon name="currency-circle-dollar" className="text-amber-500 mt-1" weight="fill"/>
@@ -792,7 +822,16 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').length === 0 && financial.filter(f => f.status === 'Pendente').length === 0 && <p className="text-sm text-slate-500">Nenhum alerta pendente.</p>}
+
+                                                {/* MENSAGEM SE NÃO HOUVER ALERTAS */}
+                                                {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').length === 0 && 
+                                                 financial.filter(f => f.status === 'Pendente').length === 0 && 
+                                                 projects.filter(p => p.expiration_date && Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30).length === 0 &&
+                                                 <div className="text-center py-4">
+                                                    <Icon name="check-circle" className="text-emerald-500 mx-auto mb-2" size={32} weight="duotone"/>
+                                                    <p className="text-sm text-slate-500">Tudo em dia! Nenhum alerta pendente.</p>
+                                                 </div>
+                                                }
                                             </div>
                                         </Card>
                                     </div>
