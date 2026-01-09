@@ -64,7 +64,7 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
         // --- FIREBASE CONFIG ---
         const firebaseConfig = {
@@ -80,31 +80,6 @@
         const db = getFirestore(app);
 
         const { useState, useEffect, useMemo, useRef } = React;
-
-        // --- UTILS: MÁSCARAS ---
-        const maskPhone = (v) => {
-            if (!v) return "";
-            v = v.replace(/\D/g, "");
-            v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
-            v = v.replace(/(\d)(\d{4})$/, "$1-$2");
-            return v.substring(0, 15);
-        };
-
-        const maskCnpjCpf = (v) => {
-            if (!v) return "";
-            v = v.replace(/\D/g, "");
-            if (v.length <= 11) {
-                v = v.replace(/(\d{3})(\d)/, "$1.$2");
-                v = v.replace(/(\d{3})(\d)/, "$1.$2");
-                v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-            } else {
-                v = v.replace(/^(\d{2})(\d)/, "$1.$2");
-                v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
-                v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
-                v = v.replace(/(\d{4})(\d)/, "$1-$2");
-            }
-            return v.substring(0, 18);
-        };
 
         // --- TOAST COMPONENT ---
         const Toast = ({ message, type, show, onClose }) => {
@@ -141,7 +116,7 @@
         const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
         // --- TELA DE LOGIN ---
-        const LoginScreen = ({ onLogin, isSyncing }) => {
+        const LoginScreen = ({ onLogin }) => {
             const [user, setUser] = useState('');
             const [pass, setPass] = useState('');
             const [remember, setRemember] = useState(false);
@@ -168,12 +143,7 @@
 
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden bg-pattern-tech">
-                    <div className="bg-white p-12 rounded-3xl shadow-2xl w-full max-w-sm z-10 border border-slate-100 animate-fade-in mx-4 relative">
-                        {isSyncing && (
-                            <div className="absolute top-4 right-4 text-xs font-bold text-indigo-500 flex items-center gap-1 animate-pulse">
-                                <Icon name="arrows-clockwise" className="animate-spin"/> Sincronizando...
-                            </div>
-                        )}
+                    <div className="bg-white p-12 rounded-3xl shadow-2xl w-full max-w-sm z-10 border border-slate-100 animate-fade-in mx-4">
                         <div className="flex justify-center mb-10">
                             <BrandLogo />
                         </div>
@@ -208,14 +178,7 @@
         // --- APP PRINCIPAL ---
         function App() {
             const [appState, setAppState] = useState('login'); 
-            const [isSyncingConfig, setIsSyncingConfig] = useState(false);
             
-            // ESTADO DE CARREGAMENTO PARA SALVAMENTO (ALTERAÇÃO 2)
-            const [isSaving, setIsSaving] = useState(false);
-
-            // ESTADO DE ORDENAÇÃO (ALTERAÇÃO 3)
-            const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-
             // DADOS E ESTADOS
             const [credentials, setCredentials] = useState(() => {
                 const saved = localStorage.getItem('softgestao_credentials');
@@ -229,12 +192,12 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]); 
+            const [contracts, setContracts] = useState([]); // Orçamentos/Contratos
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState('');
+            const [searchTerm, setSearchTerm] = useState(''); // ESTADO DE PESQUISA
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
@@ -247,10 +210,14 @@
 
             // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
+            // NOVO STATE: Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
-                setDailyChecks(prev => ({ ...prev, [id]: !prev[id] }));
+                setDailyChecks(prev => ({
+                    ...prev,
+                    [id]: !prev[id]
+                }));
             };
 
             // FORMS
@@ -269,81 +236,32 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
-            // TAREFAS DO PROJETO
+            // TAREFAS DO PROJETO (NOVO)
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
             const showToast = (msg, type = 'info') => { setToast({ show: true, message: msg, type }); setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 3000); };
 
-            // Resetar pesquisa e ordenação ao trocar de aba
+            // Resetar pesquisa ao trocar de aba
             useEffect(() => {
                 setSearchTerm('');
-                setSortConfig({ key: null, direction: 'asc' });
             }, [activeTab]);
-
-            // --- FUNÇÃO DE ORDENAÇÃO (ALTERAÇÃO 3) ---
-            const requestSort = (key) => {
-                let direction = 'asc';
-                if (sortConfig.key === key && sortConfig.direction === 'asc') {
-                    direction = 'desc';
-                }
-                setSortConfig({ key, direction });
-            };
-
-            const getSortedData = (data) => {
-                if (!sortConfig.key) return data;
-                
-                return [...data].sort((a, b) => {
-                    let valA = a[sortConfig.key];
-                    let valB = b[sortConfig.key];
-
-                    // Tratamento para strings (case insensitive)
-                    if (typeof valA === 'string') valA = valA.toLowerCase();
-                    if (typeof valB === 'string') valB = valB.toLowerCase();
-
-                    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                    return 0;
-                });
-            };
-
-            // --- SINCRONIZAÇÃO DE CONFIGURAÇÕES AO INICIAR ---
-            useEffect(() => {
-                const fetchConfig = async () => {
-                    setIsSyncingConfig(true);
-                    try {
-                        const configRef = doc(db, "config", "main");
-                        const configSnap = await getDoc(configRef);
-                        if (configSnap.exists()) {
-                            const data = configSnap.data();
-                            if (data.credentials) {
-                                setCredentials(data.credentials);
-                                localStorage.setItem('softgestao_credentials', JSON.stringify(data.credentials));
-                            }
-                            if (data.userData) {
-                                setUserData(data.userData);
-                                localStorage.setItem('softgestao_userdata', JSON.stringify(data.userData));
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Erro ao sincronizar configurações iniciais:", e);
-                    } finally {
-                        setIsSyncingConfig(false);
-                    }
-                };
-                fetchConfig();
-            }, []);
 
             // FUNÇÃO DE VERIFICAÇÃO DE SITE (PING)
             const checkProjectHealth = async (url) => {
                 if (!url) return 'offline';
+                // Adiciona https se não tiver
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
                 
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000); 
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout para ser generoso
+
+                    // mode: 'no-cors' permite "disparar" a requisição para outros domínios sem erro de CORS
+                    // O retorno é "opaque", não lemos o status code (200, 404), mas se der erro de rede (site down), cai no catch.
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
+                    
                     clearTimeout(timeoutId);
                     return 'online';
                 } catch (error) {
@@ -352,11 +270,13 @@
                 }
             };
 
-            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA
+            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA AO ENTRAR NA ABA MONITORAMENTO
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
+                        
+                        // Marca todos como "verificando" se ainda não tiverem status
                         const initialStatuses = {};
                         let needsUpdate = false;
                         projectsToMonitor.forEach(p => {
@@ -370,10 +290,14 @@
                             setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
                         }
 
+                        // Roda verificação em paralelo
                         projectsToMonitor.forEach(async (p) => {
+                            // Se já estiver checado recentemente, pula (opcional, aqui forçamos checar se estiver 'checking' ou sem status)
                             if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
+                                
+                                // Auto-marca o checklist diário se estiver online
                                 if (status === 'online') {
                                     setDailyChecks(prev => ({...prev, [p.id]: true}));
                                 }
@@ -384,13 +308,17 @@
                 }
             }, [activeTab, projects]);
 
+            // Botão para forçar re-verificação
             const forceRecheckAll = () => {
-                setProjectStatus({}); 
+                setProjectStatus({}); // Limpa status
                 const projectsToMonitor = projects.filter(p => p.hosting_url);
+                
+                // Seta tudo para checking visualmente
                 const checkingState = {};
                 projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
                 setProjectStatus(checkingState);
 
+                // Dispara
                 projectsToMonitor.forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
@@ -399,7 +327,8 @@
                 showToast('Iniciando verificação completa...', 'info');
             };
 
-            // CARREGAMENTO INICIAL DE DADOS
+
+            // CARREGAMENTO INICIAL DO FIREBASE
             useEffect(() => {
                 if (appState === 'authenticated') {
                     const fetchAllData = async () => {
@@ -418,7 +347,7 @@
                             setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
                         } catch (err) {
                             console.error("Erro ao carregar dados do Firebase:", err);
-                            showToast("Erro ao sincronizar dados da nuvem.", "error");
+                            showToast("Erro ao conectar com o banco de dados.", "error");
                         } finally {
                             setLoading(false);
                         }
@@ -427,31 +356,71 @@
                 }
             }, [appState]);
 
+            // PERSISTÊNCIA LOCAL APENAS PARA CONFIG (OPCIONAL)
+            useEffect(() => {
+                if (!loading && appState === 'authenticated') {
+                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
+                    localStorage.setItem('softgestao_credentials', JSON.stringify(credentials));
+                }
+            }, [userData, credentials, loading, appState]);
+
+            // GRÁFICO DASHBOARD
+            useEffect(() => {
+                if (activeTab === 'dashboard' && chartRef.current) {
+                    if (chartInstance.current) chartInstance.current.destroy();
+
+                    const ctx = chartRef.current.getContext('2d');
+                    const last6Months = Array.from({length: 6}, (_, i) => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - i);
+                        return d;
+                    }).reverse();
+
+                    const labels = last6Months.map(d => d.toLocaleString('pt-BR', { month: 'short' }));
+                    
+                    const incomeData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
+                    const expenseData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 },
+                                { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
+                            scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' }, ticks: { font: { size: 10 } } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+                        }
+                    });
+                }
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [activeTab, financial]);
+
             const handleLogin = (u, p) => {
                 if (u === credentials.user && p === credentials.pass) setAppState('authenticated');
                 else showToast('Acesso negado. Tente novamente.', 'error');
             };
 
-            const handleSaveConfig = async (e) => {
+            const handleSaveConfig = (e) => {
                 e.preventDefault();
-                setIsSaving(true);
-                try {
-                    await setDoc(doc(db, "config", "main"), {
-                        userData: userData,
-                        credentials: credentials 
-                    }, { merge: true });
-                    
-                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
-                    showToast('Dados atualizados na nuvem e em todos os dispositivos!', 'success');
-                } catch (err) {
-                    console.error(err);
-                    showToast('Erro ao salvar na nuvem.', 'error');
-                } finally {
-                    setIsSaving(false);
-                }
+                showToast('Dados corporativos atualizados!', 'success');
             };
 
-            // --- BACKUP & RESTORE ---
+            // --- BACKUP & RESTORE (Ainda usando JSON local por enquanto) ---
             const handleBackup = () => {
                 const data = {
                     projects, clients, financial, contracts, userData, credentials,
@@ -474,7 +443,10 @@
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        showToast('Para restaurar dados em nuvem, contate o suporte ou implemente importação em lote.', 'info');
+                        // Aqui poderíamos iterar e salvar no Firebase se desejado, 
+                        // mas por segurança mantemos apenas o estado local ou
+                        // implementaríamos uma função de importação em massa.
+                        showToast('Restaurar backup requer implementação de importação em massa para o Firebase.', 'info');
                     } catch (err) {
                         showToast('Erro ao ler arquivo de backup.', 'error');
                     }
@@ -482,7 +454,7 @@
                 reader.readAsText(file);
             };
 
-            const handleChangePassword = async (e) => {
+            const handleChangePassword = (e) => {
                 e.preventDefault();
                 if (configPasswordForm.current !== credentials.pass) {
                     showToast('Senha atual inválida.', 'error');
@@ -496,27 +468,9 @@
                     showToast('Nova senha muito curta.', 'error');
                     return;
                 }
-                
-                const newCredentials = { ...credentials, pass: configPasswordForm.newPass };
-                setIsSaving(true);
-                
-                try {
-                    await setDoc(doc(db, "config", "main"), {
-                        credentials: newCredentials,
-                        userData: userData 
-                    }, { merge: true });
-
-                    setCredentials(newCredentials);
-                    localStorage.setItem('softgestao_credentials', JSON.stringify(newCredentials));
-                    setConfigPasswordForm({ current: '', newPass: '', confirm: '' });
-                    
-                    showToast('Senha atualizada na nuvem com sucesso!', 'success');
-                } catch (err) {
-                    console.error(err);
-                    showToast('Erro ao atualizar senha na nuvem.', 'error');
-                } finally {
-                    setIsSaving(false);
-                }
+                setCredentials({ ...credentials, pass: configPasswordForm.newPass });
+                setConfigPasswordForm({ current: '', newPass: '', confirm: '' });
+                showToast('Senha de acesso atualizada com sucesso!', 'success');
             };
 
             const deleteItem = async (id, list, setList) => {
@@ -540,6 +494,71 @@
                 }
             };
 
+            const openModal = (type, item = null) => {
+                setModalType(type);
+                setEditingItem(item);
+                const today = new Date().toISOString().split('T')[0];
+
+                if (type === 'project') {
+                    setProjectForm(item || { 
+                        title: '', client_id: '', type: 'Website', deadline: '', 
+                        description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', 
+                        priority: 'Média', hosting_url: '', deploy_date: '', expiration_date: '', manual_content: '',
+                        payment_method: 'Pix'
+                    });
+                    setCurrentProjectTasks(item?.tasks || []);
+                }
+                else if (type === 'client') setClientForm(item || { name: '', company: '', email: '', phone: '', segment: 'Varejo', status: 'Ativo', cnpj_cpf: '' });
+                else if (type === 'finance') setFinanceForm(item || { type: 'Receita', category: 'Projeto', description: '', value: '', date: today, status: 'Pendente' });
+                else if (type === 'hosting') setHostingForm({ hosting_url: item.hosting_url || '', deploy_date: item.deploy_date || '', expiration_date: item.expiration_date || '' });
+                else if (type === 'manual') setManualForm({ content: item.manual_content || '' });
+                else if (type === 'contract') setContractForm(item || { client_id: '', project_id: '', title: '', start_date: today, end_date: '', value: '', content: '', status: 'Rascunho' });
+
+                setIsModalOpen(true);
+            };
+
+            const addProjectTask = () => {
+                if (!newTaskText.trim()) return;
+                setCurrentProjectTasks([...currentProjectTasks, { id: Date.now(), text: newTaskText, done: false }]);
+                setNewTaskText('');
+            };
+
+            const toggleProjectTask = (taskId) => {
+                setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t));
+            };
+
+            const removeProjectTask = (taskId) => {
+                setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId));
+            };
+
+            const printReceipt = (item) => {
+                const w = window.open('', '_blank');
+                w.document.write(`
+                    <html><head><title>Recibo</title><style>body{font-family:sans-serif;padding:40px;text-align:center}.box{border:2px solid #000;padding:20px;max-width:600px;margin:0 auto}h1{margin:0 0 20px 0}p{margin:10px 0;text-align:left}.val{font-weight:bold;font-size:1.2em}</style></head>
+                    <body>
+                        <div class="box">
+                            <h1>RECIBO</h1>
+                            <p>Recebemos a importância de <span class="val">${formatCurrency(item.value)}</span></p>
+                            <p>Referente a: <strong>${item.description}</strong></p>
+                            <p>Categoria: ${item.category}</p>
+                            <p>Data: ${new Date(item.date).toLocaleDateString()}</p>
+                            <br><br>
+                            <p style="text-align:center">_____________________________</p>
+                            <p style="text-align:center">${userData.name}</p>
+                            <p style="text-align:center;font-size:0.8em">${userData.cnpj}</p>
+                        </div>
+                        <script>window.print();<\/script>
+                    </body></html>
+                `);
+                w.document.close();
+            };
+
+            const generateManualTemplate = () => {
+                if (!editingItem) return;
+                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n...\n`; // (Simplified for brevity)
+                setManualForm({ content: template });
+            };
+            
             // --- GERADOR JURÍDICO IA ---
             const generateLegalContract = () => {
                 const client = clients.find(c => c.id == contractForm.client_id);
@@ -548,7 +567,7 @@
                 if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
                 
                 const value = parseFloat(contractForm.value || project.value || 0);
-                const fineValue = formatCurrency(value * 20); 
+                const fineValue = formatCurrency(value * 20); // Multa 20x
                 
                 const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
                 const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
@@ -600,7 +619,6 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
             const saveItem = async (e) => {
                 e.preventDefault();
-                setIsSaving(true); // START LOADING (ALTERAÇÃO 2)
                 
                 try {
                     if (modalType === 'project') {
@@ -654,8 +672,6 @@ Data de Geração: ${new Date().toLocaleDateString()}
                 } catch (err) {
                     console.error("Erro ao salvar:", err);
                     showToast("Erro ao salvar no banco de dados.", "error");
-                } finally {
-                    setIsSaving(false); // END LOADING (ALTERAÇÃO 2)
                 }
             };
 
@@ -674,13 +690,13 @@ Data de Geração: ${new Date().toLocaleDateString()}
                 window.open(`https://wa.me/55${formatted}`, '_blank');
             };
 
-            if (appState === 'login') return <LoginScreen onLogin={handleLogin} isSyncing={isSyncingConfig} />;
+            if (appState === 'login') return <LoginScreen onLogin={handleLogin} />;
 
             const menuItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: 'squares-four' },
-                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' }, 
                 { id: 'clients', label: 'Meus Clientes', icon: 'users-three' },
                 { id: 'projects', label: 'Projetos Web', icon: 'laptop' },
+                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' }, // NOVA ABA
                 { id: 'deploy', label: 'Entregas & Manuais', icon: 'rocket-launch' },
                 { id: 'contracts', label: 'Contratos Jurídicos', icon: 'scroll' },
                 { id: 'finance', label: 'Financeiro', icon: 'coins' },
@@ -1109,6 +1125,267 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
+                            {/* PROJETOS */}
+                            {activeTab === 'projects' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Meus Projetos</h2>
+                                            <p className="text-sm text-slate-500 mt-1">Gestão de desenvolvimento e entregas</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()) || (clients.find(c => c.id === p.client_id)?.company || '').toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                            <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500">
+                                                <div className="p-6">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
+                                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                    <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    
+                                                    <div className="space-y-3 pt-4 border-t border-slate-100">
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Stack</span>
+                                                            <span className="font-bold text-slate-700">{p.tech_stack}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Valor</span>
+                                                            <span className="font-bold text-emerald-600">{formatCurrency(p.value)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Prazo</span>
+                                                            <span className="font-bold text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Expiração</span>
+                                                            <span className={`font-bold ${p.expiration_date ? 'text-slate-700' : 'text-slate-300 italic'}`}>
+                                                                {p.expiration_date ? new Date(p.expiration_date).toLocaleDateString() : '-'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-400 font-bold">Pagamento</span>
+                                                            <span className="font-bold text-slate-700">{p.payment_method || 'Não definido'}</span>
+                                                        </div>
+                                                        
+                                                        {/* INDICADOR DE TAREFAS */}
+                                                        <div className="pt-2">
+                                                            <div className="flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                                                                <span>Tarefas</span>
+                                                                <span>{(p.tasks || []).filter(t => t.done).length} / {(p.tasks || []).length}</span>
+                                                            </div>
+                                                            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+                                                                <div className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${(p.tasks || []).length > 0 ? ((p.tasks || []).filter(t => t.done).length / (p.tasks || []).length) * 100 : 0}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CLIENTES */}
+                            {activeTab === 'clients' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
+                                            <p className="text-sm text-slate-500">Empresas e parceiros</p>
+                                        </div>
+                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700"><Icon name="plus" weight="bold"/> Adicionar</button>
+                                    </div>
+                                    <Card className="overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase tracking-wider border-b border-slate-100">
+                                                    <tr>
+                                                        <th className="p-5">Empresa / Cliente</th>
+                                                        <th className="p-5">CNPJ / CPF</th>
+                                                        <th className="p-5">Contato</th>
+                                                        <th className="p-5">Segmento</th>
+                                                        <th className="p-5 text-center">Status</th>
+                                                        <th className="p-5 text-center">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50">
+                                                    {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                                        <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="p-5">
+                                                                <p className="font-bold text-slate-800">{c.company}</p>
+                                                                <p className="text-xs text-slate-400">{c.name}</p>
+                                                            </td>
+                                                            <td className="p-5 text-slate-500 font-mono text-xs">{c.cnpj_cpf || '-'}</td>
+                                                            <td className="p-5 text-slate-600">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="flex items-center gap-2"><Icon name="envelope" size={14}/> {c.email}</span>
+                                                                    <span className="flex items-center gap-2">
+                                                                        <Icon name="phone" size={14}/> {c.phone} 
+                                                                        <button onClick={() => openWhatsapp(c.phone)} className="ml-2 text-emerald-500 hover:text-emerald-600" title="Abrir WhatsApp">
+                                                                            <Icon name="whatsapp-logo" size={18} weight="fill"/>
+                                                                        </button>
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-5"><span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold text-slate-600">{c.segment}</span></td>
+                                                            <td className="p-5 text-center">
+                                                                <span className={`inline-block w-2 h-2 rounded-full ${c.status === 'Ativo' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                                                            </td>
+                                                            <td className="p-5 flex justify-center gap-2">
+                                                                <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                                <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
+                                </div>
+                            )}
+
+                            {/* FINANCEIRO */}
+                            {activeTab === 'finance' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Fluxo de Caixa</h2>
+                                            <p className="text-sm text-slate-500">Receitas e Despesas do Estúdio</p>
+                                        </div>
+                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Receitas Recentes</h3>
+                                            {financial.filter(f => f.type === 'Receita' && (f.description.toLowerCase().includes(searchTerm.toLowerCase()) || f.category.toLowerCase().includes(searchTerm.toLowerCase()))).map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
+                                                    <div>
+                                                        <p className="font-bold text-slate-800">{f.description}</p>
+                                                        <p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()} • {f.category}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-bold text-emerald-600">+ {formatCurrency(f.value)}</span>
+                                                        <button onClick={() => printReceipt(f)} className="text-slate-300 hover:text-slate-500" title="Imprimir Recibo"><Icon name="printer" weight="bold"/></button>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Despesas Recentes</h3>
+                                            {financial.filter(f => f.type === 'Despesa' && (f.description.toLowerCase().includes(searchTerm.toLowerCase()) || f.category.toLowerCase().includes(searchTerm.toLowerCase()))).map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
+                                                    <div>
+                                                        <p className="font-bold text-slate-800">{f.description}</p>
+                                                        <p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()} • {f.category}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-bold text-rose-600">- {formatCurrency(f.value)}</span>
+                                                        <button onClick={() => printReceipt(f)} className="text-slate-300 hover:text-slate-500" title="Imprimir Comprovante"><Icon name="printer" weight="bold"/></button>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* RELATÓRIOS (ATUALIZADO PARA WORD) */}
+                            {activeTab === 'reports' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-indigo-500" onClick={() => {
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório de Projetos</title>
+                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
+                                                </head><body>
+                                                <h1>Relatório de Projetos - SoftGestão</h1>
+                                                <table>
+                                                    <thead><tr><th>Projeto</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead>
+                                                    <tbody>
+                                                        ${projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c=>c.id===p.client_id)?.company || '-'}</td><td>${formatCurrency(p.value)}</td><td>${p.status}</td></tr>`).join('')}
+                                                    </tbody>
+                                                </table>
+                                                </body></html>
+                                            `;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
+                                        }}>
+                                            <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
+                                            <h3 className="font-bold text-lg text-slate-800">Exportar Projetos (Word)</h3>
+                                            <p className="text-sm text-slate-500 mt-2">Lista completa de projetos e status em DOC.</p>
+                                        </Card>
+                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-emerald-500" onClick={() => {
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório Financeiro</title>
+                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
+                                                </head><body>
+                                                <h1>Relatório Financeiro - SoftGestão</h1>
+                                                <table>
+                                                    <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead>
+                                                    <tbody>
+                                                        ${financial.map(f => `<tr><td>${new Date(f.date).toLocaleDateString()}</td><td>${f.description}</td><td>${f.type}</td><td>${formatCurrency(f.value)}</td></tr>`).join('')}
+                                                    </tbody>
+                                                </table>
+                                                </body></html>
+                                            `;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
+                                        }}>
+                                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
+                                            <h3 className="font-bold text-lg text-slate-800">Exportar Financeiro (Word)</h3>
+                                            <p className="text-sm text-slate-500 mt-2">Balanço detalhado de entradas e saídas em DOC.</p>
+                                        </Card>
+                                        
+                                        {/* NOVO RELATÓRIO DE DESEMPENHO */}
+                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-purple-500" onClick={() => {
+                                            const today = new Date();
+                                            const currentMonth = today.getMonth();
+                                            const currentYear = today.getFullYear();
+                                            
+                                            const monthlyIncome = financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
+                                            const monthlyExpense = financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
+                                            const completedProjects = projects.filter(p => p.status === 'Entregue' && new Date(p.deadline).getMonth() === currentMonth && new Date(p.deadline).getFullYear() === currentYear);
+
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório de Desempenho Mensal</title>
+                                                <style>body{font-family:Arial,sans-serif} .box{border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#f9f9f9}</style>
+                                                </head><body>
+                                                <h1>Relatório de Desempenho - ${today.toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</h1>
+                                                <div class="box">
+                                                    <h3>Resumo Financeiro</h3>
+                                                    <p><strong>Faturamento:</strong> ${formatCurrency(monthlyIncome)}</p>
+                                                    <p><strong>Despesas:</strong> ${formatCurrency(monthlyExpense)}</p>
+                                                    <p><strong>Lucro Líquido:</strong> ${formatCurrency(monthlyIncome - monthlyExpense)}</p>
+                                                </div>
+                                                <h3>Projetos Entregues no Mês</h3>
+                                                <ul>
+                                                    ${completedProjects.length > 0 ? completedProjects.map(p => `<li>${p.title} - ${clients.find(c=>c.id===p.client_id)?.company}</li>`).join('') : '<li>Nenhum projeto entregue este mês.</li>'}
+                                                </ul>
+                                                </body></html>
+                                            `;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download=`desempenho_mensal_${currentMonth+1}_${currentYear}.doc`; a.click();
+                                        }}>
+                                            <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="chart-pie-slice" size={32} weight="duotone" /></div>
+                                            <h3 className="font-bold text-lg text-slate-800">Desempenho do Mês</h3>
+                                            <p className="text-sm text-slate-500 mt-2">Resumo de lucro e entregas do mês atual.</p>
+                                        </Card>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* CONFIGURAÇÕES - NOVO BLOCO */}
                             {activeTab === 'config' && (
                                 <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
@@ -1141,7 +1418,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">CNPJ Principal</label>
-                                                    <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: maskCnpjCpf(e.target.value)})} maxLength={18} />
+                                                    <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} />
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Endereço Completo</label>
@@ -1151,8 +1428,8 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">E-mail Principal</label>
                                                     <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} />
                                                 </div>
-                                                <button type="submit" disabled={isSaving} className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-indigo-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                    {isSaving ? <><Icon name="spinner" className="animate-spin" /> Salvando...</> : <><Icon name="floppy-disk" weight="bold"/> Atualizar Cadastro</>}
+                                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-indigo-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
+                                                    <Icon name="floppy-disk" weight="bold"/> Atualizar Cadastro
                                                 </button>
                                             </form>
                                         </Card>
@@ -1162,8 +1439,8 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                 <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Senha Atual" value={configPasswordForm.current} onChange={e => setConfigPasswordForm({...configPasswordForm, current: e.target.value})} />
                                                 <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Nova Senha" value={configPasswordForm.newPass} onChange={e => setConfigPasswordForm({...configPasswordForm, newPass: e.target.value})} />
                                                 <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Confirmar Nova Senha" value={configPasswordForm.confirm} onChange={e => setConfigPasswordForm({...configPasswordForm, confirm: e.target.value})} />
-                                                <button type="submit" disabled={isSaving} className={`w-full bg-rose-600 hover:bg-slate-900 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs shadow-xl shadow-rose-100 flex justify-center items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                    {isSaving ? <><Icon name="spinner" className="animate-spin" /> Salvando...</> : <><Icon name="shield-check" weight="bold"/> Alterar Senha</>}
+                                                <button type="submit" className="w-full bg-rose-600 hover:bg-slate-900 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs shadow-xl shadow-rose-100 flex justify-center items-center gap-2">
+                                                    <Icon name="shield-check" weight="bold"/> Alterar Senha
                                                 </button>
                                             </form>
                                         </Card>
@@ -1260,11 +1537,11 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                         {modalType === 'client' && (
                                             <>
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Nome da Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: maskCnpjCpf(e.target.value)})} maxLength={18} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Nome do Contato</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: maskPhone(e.target.value)})} maxLength={15} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
                                                 </div>
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Segmento de Mercado</label><select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={clientForm.segment} onChange={e => setClientForm({...clientForm, segment: e.target.value})}><option>Varejo</option><option>Serviços</option><option>Saúde</option><option>Jurídico</option><option>Tecnologia</option><option>Outros</option></select></div>
                                             </>
@@ -1361,10 +1638,8 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
                                     {/* FIXED FOOTER */}
                                     <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none">
-                                        <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className={`flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all ${isSaving ? 'cursor-not-allowed opacity-50' : ''}`}>Cancelar</button>
-                                        <button type="submit" disabled={isSaving} className={`flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2 ${isSaving ? 'cursor-not-allowed opacity-75' : ''}`}>
-                                            {isSaving ? <><Icon name="spinner" className="animate-spin" /> Salvando...</> : <><Icon name="check" weight="bold"/> Salvar</>}
-                                        </button>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all">Cancelar</button>
+                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button>
                                     </div>
                                 </form>
                             </div>
