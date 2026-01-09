@@ -64,7 +64,8 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+        // Importando getDoc e setDoc para salvar configurações na nuvem
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
         // --- FIREBASE CONFIG ---
         const firebaseConfig = {
@@ -177,6 +178,7 @@
 
         // --- APP PRINCIPAL ---
         function App() {
+            // Inicializa com dados locais para evitar tela branca, mas tenta atualizar da nuvem em seguida
             const [appState, setAppState] = useState('login'); 
             
             // DADOS E ESTADOS
@@ -192,12 +194,12 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]); // Orçamentos/Contratos
+            const [contracts, setContracts] = useState([]); 
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState(''); // ESTADO DE PESQUISA
+            const [searchTerm, setSearchTerm] = useState('');
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
@@ -210,14 +212,10 @@
 
             // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
-            // NOVO STATE: Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
-                setDailyChecks(prev => ({
-                    ...prev,
-                    [id]: !prev[id]
-                }));
+                setDailyChecks(prev => ({ ...prev, [id]: !prev[id] }));
             };
 
             // FORMS
@@ -236,7 +234,7 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
-            // TAREFAS DO PROJETO (NOVO)
+            // TAREFAS DO PROJETO
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
@@ -251,17 +249,12 @@
             // FUNÇÃO DE VERIFICAÇÃO DE SITE (PING)
             const checkProjectHealth = async (url) => {
                 if (!url) return 'offline';
-                // Adiciona https se não tiver
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
                 
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout para ser generoso
-
-                    // mode: 'no-cors' permite "disparar" a requisição para outros domínios sem erro de CORS
-                    // O retorno é "opaque", não lemos o status code (200, 404), mas se der erro de rede (site down), cai no catch.
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); 
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
-                    
                     clearTimeout(timeoutId);
                     return 'online';
                 } catch (error) {
@@ -270,13 +263,12 @@
                 }
             };
 
-            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA AO ENTRAR NA ABA MONITORAMENTO
+            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
                         
-                        // Marca todos como "verificando" se ainda não tiverem status
                         const initialStatuses = {};
                         let needsUpdate = false;
                         projectsToMonitor.forEach(p => {
@@ -290,14 +282,10 @@
                             setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
                         }
 
-                        // Roda verificação em paralelo
                         projectsToMonitor.forEach(async (p) => {
-                            // Se já estiver checado recentemente, pula (opcional, aqui forçamos checar se estiver 'checking' ou sem status)
                             if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
-                                
-                                // Auto-marca o checklist diário se estiver online
                                 if (status === 'online') {
                                     setDailyChecks(prev => ({...prev, [p.id]: true}));
                                 }
@@ -308,17 +296,13 @@
                 }
             }, [activeTab, projects]);
 
-            // Botão para forçar re-verificação
             const forceRecheckAll = () => {
-                setProjectStatus({}); // Limpa status
+                setProjectStatus({}); 
                 const projectsToMonitor = projects.filter(p => p.hosting_url);
-                
-                // Seta tudo para checking visualmente
                 const checkingState = {};
                 projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
                 setProjectStatus(checkingState);
 
-                // Dispara
                 projectsToMonitor.forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
@@ -327,13 +311,13 @@
                 showToast('Iniciando verificação completa...', 'info');
             };
 
-
-            // CARREGAMENTO INICIAL DO FIREBASE
+            // CARREGAMENTO INICIAL DO FIREBASE (DADOS + CONFIGURAÇÕES)
             useEffect(() => {
                 if (appState === 'authenticated') {
                     const fetchAllData = async () => {
                         setLoading(true);
                         try {
+                            // Carrega Dados Normais
                             const projectsSnap = await getDocs(collection(db, "projects"));
                             setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
 
@@ -345,9 +329,28 @@
 
                             const contractsSnap = await getDocs(collection(db, "contracts"));
                             setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
+                            // --- NOVO: Carrega Configurações da Nuvem ---
+                            // Tenta buscar o documento de configuração 'main' na coleção 'config'
+                            const configRef = doc(db, "config", "main");
+                            const configSnap = await getDoc(configRef);
+                            
+                            if (configSnap.exists()) {
+                                const data = configSnap.data();
+                                // Atualiza os estados locais com o que veio da nuvem
+                                if (data.credentials) {
+                                    setCredentials(data.credentials);
+                                    localStorage.setItem('softgestao_credentials', JSON.stringify(data.credentials)); // Atualiza cache local
+                                }
+                                if (data.userData) {
+                                    setUserData(data.userData);
+                                    localStorage.setItem('softgestao_userdata', JSON.stringify(data.userData)); // Atualiza cache local
+                                }
+                            }
+
                         } catch (err) {
                             console.error("Erro ao carregar dados do Firebase:", err);
-                            showToast("Erro ao conectar com o banco de dados.", "error");
+                            showToast("Erro ao sincronizar dados da nuvem.", "error");
                         } finally {
                             setLoading(false);
                         }
@@ -356,71 +359,33 @@
                 }
             }, [appState]);
 
-            // PERSISTÊNCIA LOCAL APENAS PARA CONFIG (OPCIONAL)
-            useEffect(() => {
-                if (!loading && appState === 'authenticated') {
-                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
-                    localStorage.setItem('softgestao_credentials', JSON.stringify(credentials));
-                }
-            }, [userData, credentials, loading, appState]);
-
-            // GRÁFICO DASHBOARD
-            useEffect(() => {
-                if (activeTab === 'dashboard' && chartRef.current) {
-                    if (chartInstance.current) chartInstance.current.destroy();
-
-                    const ctx = chartRef.current.getContext('2d');
-                    const last6Months = Array.from({length: 6}, (_, i) => {
-                        const d = new Date();
-                        d.setMonth(d.getMonth() - i);
-                        return d;
-                    }).reverse();
-
-                    const labels = last6Months.map(d => d.toLocaleString('pt-BR', { month: 'short' }));
-                    
-                    const incomeData = last6Months.map(date => {
-                        return financial
-                            .filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
-                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
-                    });
-
-                    const expenseData = last6Months.map(date => {
-                        return financial
-                            .filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
-                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
-                    });
-
-                    chartInstance.current = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: labels,
-                            datasets: [
-                                { label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 },
-                                { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
-                            scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' }, ticks: { font: { size: 10 } } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
-                        }
-                    });
-                }
-                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-            }, [activeTab, financial]);
-
+            // Esta função lida com o Login Inicial (lê do estado atual, que pode ter vindo do localStorage)
+            // Mas logo em seguida o useEffect acima vai atualizar com a nuvem se houver internet.
             const handleLogin = (u, p) => {
+                // Checagem básica inicial com o que temos carregado
                 if (u === credentials.user && p === credentials.pass) setAppState('authenticated');
                 else showToast('Acesso negado. Tente novamente.', 'error');
             };
 
-            const handleSaveConfig = (e) => {
+            const handleSaveConfig = async (e) => {
                 e.preventDefault();
-                showToast('Dados corporativos atualizados!', 'success');
+                try {
+                    // Salva na Nuvem
+                    await setDoc(doc(db, "config", "main"), {
+                        userData: userData,
+                        credentials: credentials // Mantém a senha atual sincronizada caso ela não mude
+                    }, { merge: true });
+                    
+                    // Salva Local
+                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
+                    showToast('Dados atualizados na nuvem e em todos os dispositivos!', 'success');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Erro ao salvar na nuvem.', 'error');
+                }
             };
 
-            // --- BACKUP & RESTORE (Ainda usando JSON local por enquanto) ---
+            // --- BACKUP & RESTORE ---
             const handleBackup = () => {
                 const data = {
                     projects, clients, financial, contracts, userData, credentials,
@@ -443,10 +408,7 @@
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        // Aqui poderíamos iterar e salvar no Firebase se desejado, 
-                        // mas por segurança mantemos apenas o estado local ou
-                        // implementaríamos uma função de importação em massa.
-                        showToast('Restaurar backup requer implementação de importação em massa para o Firebase.', 'info');
+                        showToast('Para restaurar dados em nuvem, contate o suporte ou implemente importação em lote.', 'info');
                     } catch (err) {
                         showToast('Erro ao ler arquivo de backup.', 'error');
                     }
@@ -454,7 +416,7 @@
                 reader.readAsText(file);
             };
 
-            const handleChangePassword = (e) => {
+            const handleChangePassword = async (e) => {
                 e.preventDefault();
                 if (configPasswordForm.current !== credentials.pass) {
                     showToast('Senha atual inválida.', 'error');
@@ -468,9 +430,26 @@
                     showToast('Nova senha muito curta.', 'error');
                     return;
                 }
-                setCredentials({ ...credentials, pass: configPasswordForm.newPass });
-                setConfigPasswordForm({ current: '', newPass: '', confirm: '' });
-                showToast('Senha de acesso atualizada com sucesso!', 'success');
+                
+                const newCredentials = { ...credentials, pass: configPasswordForm.newPass };
+                
+                try {
+                    // Salva a nova senha na Nuvem
+                    await setDoc(doc(db, "config", "main"), {
+                        credentials: newCredentials,
+                        userData: userData // Garante que os dados da empresa não se percam no merge
+                    }, { merge: true });
+
+                    // Atualiza estado local
+                    setCredentials(newCredentials);
+                    localStorage.setItem('softgestao_credentials', JSON.stringify(newCredentials));
+                    setConfigPasswordForm({ current: '', newPass: '', confirm: '' });
+                    
+                    showToast('Senha atualizada na nuvem com sucesso!', 'success');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Erro ao atualizar senha na nuvem.', 'error');
+                }
             };
 
             const deleteItem = async (id, list, setList) => {
