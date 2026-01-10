@@ -694,9 +694,9 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
             const menuItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: 'squares-four' },
+                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' }, // MOVIDO PARA BAIXO DO DASHBOARD
                 { id: 'clients', label: 'Meus Clientes', icon: 'users-three' },
                 { id: 'projects', label: 'Projetos Web', icon: 'laptop' },
-                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' }, // NOVA ABA
                 { id: 'deploy', label: 'Entregas & Manuais', icon: 'rocket-launch' },
                 { id: 'contracts', label: 'Contratos Jurídicos', icon: 'scroll' },
                 { id: 'finance', label: 'Financeiro', icon: 'coins' },
@@ -1496,7 +1496,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tecnologias</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={projectForm.tech_stack} onChange={e => setProjectForm({...projectForm, tech_stack: e.target.value})} placeholder="Ex: React, Node, WordPress..." /></div>
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Forma de Pagamento</label>
-                                                    <select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.payment_method} onChange={e => setProjectForm({...projectForm, payment_method: e.target.value})}>
+                                                    <select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.payment_method} onChange={e => setProjectForm({...payment_method, payment_method: e.target.value})}>
                                                         <option>Pix</option>
                                                         <option>Boleto</option>
                                                         <option>Cartão de Crédito</option>
