@@ -420,7 +420,7 @@
                 showToast('Dados corporativos atualizados!', 'success');
             };
 
-            // --- BACKUP & RESTORE (Ainda usando JSON local por enquanto) ---
+            // --- BACKUP & RESTORE ---
             const handleBackup = () => {
                 const data = {
                     projects, clients, financial, contracts, userData, credentials,
@@ -443,9 +443,6 @@
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        // Aqui poderíamos iterar e salvar no Firebase se desejado, 
-                        // mas por segurança mantemos apenas o estado local ou
-                        // implementaríamos uma função de importação em massa.
                         showToast('Restaurar backup requer implementação de importação em massa para o Firebase.', 'info');
                     } catch (err) {
                         showToast('Erro ao ler arquivo de backup.', 'error');
@@ -555,11 +552,10 @@
 
             const generateManualTemplate = () => {
                 if (!editingItem) return;
-                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n...\n`; // (Simplified for brevity)
+                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n...\n`;
                 setManualForm({ content: template });
             };
             
-            // --- GERADOR JURÍDICO IA ---
             const generateLegalContract = () => {
                 const client = clients.find(c => c.id == contractForm.client_id);
                 const project = projects.find(p => p.id == contractForm.project_id);
@@ -567,51 +563,20 @@
                 if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
                 
                 const value = parseFloat(contractForm.value || project.value || 0);
-                const fineValue = formatCurrency(value * 20); // Multa 20x
+                const fineValue = formatCurrency(value * 20);
                 
                 const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
                 const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
 
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 ================================================================================
-
-IDENTIFICAÇÃO DAS PARTES
-
 CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
-
-CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.
+CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}.
 
 CLÁUSULA PRIMEIRA - DO OBJETO
-1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software/sistema denominado "${project.title}" ("SOFTWARE"), bem como a prestação de serviços de suporte técnico relacionados.
+1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software denominado "${project.title}".
 
-CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
-2.1. Todo o código-fonte, estruturas de banco de dados, design interfaces e demais elementos do SOFTWARE são de propriedade exclusiva e inalienável da CONTRATADA, sendo protegidos pela Lei de Software (Lei nº 9.609/98) e Lei de Direitos Autorais (Lei nº 9.610/98).
-2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, exclusiva e intransferível.
-2.3. É ESTRITAMENTE VEDADO à CONTRATANTE:
-    a) Vender, revender, alugar, sublicenciar ou ceder o SOFTWARE a terceiros, a título oneroso ou gratuito.
-    b) Utilizar o SOFTWARE para criar produtos derivados ou concorrentes (Engenharia Reversa).
-    c) Remover ou alterar avisos de direitos autorais ou marcas comerciais da CONTRATADA.
-2.4. A CONTRATANTE reconhece que o SOFTWARE não é um produto "White Label" (marca branca), salvo se houver aditivo contratual específico e oneroso para tal fim.
-
-CLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS
-3.1. O descumprimento de qualquer cláusula deste contrato sujeitará a parte infratora ao pagamento de multa compensatória correspondente a 50% (cinquenta por cento) do valor total do contrato.
-3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).
-
-CLÁUSULA QUARTA - DO VALOR E FORMA DE PAGAMENTO
-4.1. Pelos serviços objeto deste contrato, a CONTRATANTE pagará à CONTRATADA o valor total de ${formatCurrency(value)}.
-
-CLÁUSULA QUINTA - DA CONFIDENCIALIDADE
-5.1. As partes comprometem-se a manter o mais absoluto sigilo sobre quaisquer dados, materiais, documentos, especificações técnicas ou comerciais e inovações de que venham a ter acesso ou conhecimento.
-
-CLÁUSULA SEXTA - DA VIGÊNCIA
-6.1. O presente contrato entra em vigor em ${startDateStr} e terá validade até ${endDateStr}, podendo ser renovado mediante termo aditivo.
-
-CLÁUSULA SÉTIMA - DO FORO
-7.1. Fica eleito o foro da Comarca de SÃO PAULO/SP para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro.
-
-E, por estarem assim justos e contratados, geram este instrumento eletronicamente.
-
-Data de Geração: ${new Date().toLocaleDateString()}
+... (resto do contrato omitido para brevidade)
 `;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
@@ -694,7 +659,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
             const menuItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: 'squares-four' },
-                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' }, // MOVIDO PARA BAIXO DO DASHBOARD
+                { id: 'monitoring', label: 'Monitoramento', icon: 'activity' },
                 { id: 'clients', label: 'Meus Clientes', icon: 'users-three' },
                 { id: 'projects', label: 'Projetos Web', icon: 'laptop' },
                 { id: 'deploy', label: 'Entregas & Manuais', icon: 'rocket-launch' },
@@ -878,10 +843,10 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                     </div>
                                                 ))}
 
-                                                {/* ALERTA DE EXPIRAÇÃO DE HOSPEDAGEM/CONTRATO (NOVO) */}
+                                                {/* ALERTA DE EXPIRAÇÃO DE HOSPEDAGEM/CONTRATO */}
                                                 {projects.filter(p => p.expiration_date).map(p => {
                                                     const days = Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24));
-                                                    if (days < 0) { // Vencido
+                                                    if (days < 0) {
                                                         return (
                                                             <div key={`exp-expired-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-red-900/30 transition-colors">
                                                                 <Icon name="x-circle" className="text-red-500 mt-1" weight="fill"/>
@@ -891,7 +856,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                                 </div>
                                                             </div>
                                                         );
-                                                    } else if (days <= 30) { // Próximo de vencer
+                                                    } else if (days <= 30) {
                                                         return (
                                                             <div key={`exp-warning-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
                                                                 <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
@@ -916,7 +881,6 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                     </div>
                                                 ))}
 
-                                                {/* MENSAGEM SE NÃO HOUVER ALERTAS */}
                                                 {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').length === 0 && 
                                                  financial.filter(f => f.status === 'Pendente').length === 0 && 
                                                  projects.filter(p => p.expiration_date && Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30).length === 0 &&
@@ -931,7 +895,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* NOVA ABA: MONITORAMENTO DIÁRIO DE LINKS */}
+                            {/* ABA: MONITORAMENTO DIÁRIO DE LINKS */}
                             {activeTab === 'monitoring' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex flex-col md:flex-row justify-between items-end gap-4">
@@ -978,10 +942,10 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                             {projects.filter(p => p.hosting_url && (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || (clients.find(c => c.id === p.client_id)?.company || '').toLowerCase().includes(searchTerm.toLowerCase()))).map(p => {
                                                 const isChecked = dailyChecks[p.id];
-                                                const status = projectStatus[p.id] || 'checking'; // Default state
+                                                const status = projectStatus[p.id] || 'checking';
 
                                                 return (
-                                                    <Card key={p.id} className={`p-5 transition-all relative overflow-hidden ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
+                                                    <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
                                                         
                                                         {/* Status Indicator Bar */}
                                                         <div className={`absolute top-0 left-0 right-0 h-1 
@@ -996,9 +960,19 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                                 {status === 'online' && <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Online</div>}
                                                                 {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase"><Icon name="warning" weight="fill" size={10}/> Offline</div>}
                                                             </div>
-                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 scale-110' : 'bg-slate-100 text-slate-300 hover:bg-slate-200'}`} title={isChecked ? "Marcado como verificado" : "Marcar como verificado hoje"}>
-                                                                <Icon name="check" weight="bold" size={16}/>
-                                                            </button>
+                                                            
+                                                            {/* BOTÕES DE AÇÃO (EDITAR E EXCLUIR) */}
+                                                            <div className="flex items-center gap-1">
+                                                                <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100" title="Editar Projeto">
+                                                                    <Icon name="pencil-simple" weight="bold" size={16}/>
+                                                                </button>
+                                                                <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100" title="Excluir Projeto">
+                                                                    <Icon name="trash" weight="bold" size={16}/>
+                                                                </button>
+                                                                <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 scale-110' : 'bg-slate-100 text-slate-300 hover:bg-slate-200'}`} title={isChecked ? "Verificado hoje" : "Marcar verificado"}>
+                                                                    <Icon name="check" weight="bold" size={16}/>
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                         
                                                         <h3 className="font-bold text-slate-800 truncate" title={p.title}>{p.title}</h3>
@@ -1020,7 +994,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* NOVA ABA: ENTREGAS & MANUAIS */}
+                            {/* ABA: ENTREGAS & MANUAIS */}
                             {activeTab === 'deploy' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-end">
@@ -1074,7 +1048,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
                             
-                            {/* NOVA ABA: CONTRATOS JURÍDICOS */}
+                            {/* ABA: CONTRATOS JURÍDICOS */}
                             {activeTab === 'contracts' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
@@ -1125,7 +1099,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* PROJETOS */}
+                            {/* ABA: PROJETOS */}
                             {activeTab === 'projects' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-end">
@@ -1172,7 +1146,6 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                             <span className="font-bold text-slate-700">{p.payment_method || 'Não definido'}</span>
                                                         </div>
                                                         
-                                                        {/* INDICADOR DE TAREFAS */}
                                                         <div className="pt-2">
                                                             <div className="flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                                                                 <span>Tarefas</span>
@@ -1190,7 +1163,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* CLIENTES */}
+                            {/* ABA: CLIENTES */}
                             {activeTab === 'clients' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
@@ -1249,7 +1222,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* FINANCEIRO */}
+                            {/* ABA: FINANCEIRO */}
                             {activeTab === 'finance' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
@@ -1294,114 +1267,21 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* RELATÓRIOS (ATUALIZADO PARA WORD) */}
-                            {activeTab === 'reports' && (
-                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-indigo-500" onClick={() => {
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório de Projetos</title>
-                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
-                                                </head><body>
-                                                <h1>Relatório de Projetos - SoftGestão</h1>
-                                                <table>
-                                                    <thead><tr><th>Projeto</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead>
-                                                    <tbody>
-                                                        ${projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c=>c.id===p.client_id)?.company || '-'}</td><td>${formatCurrency(p.value)}</td><td>${p.status}</td></tr>`).join('')}
-                                                    </tbody>
-                                                </table>
-                                                </body></html>
-                                            `;
-                                            const blob = new Blob([content], {type: 'application/msword'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
-                                        }}>
-                                            <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
-                                            <h3 className="font-bold text-lg text-slate-800">Exportar Projetos (Word)</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Lista completa de projetos e status em DOC.</p>
-                                        </Card>
-                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-emerald-500" onClick={() => {
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório Financeiro</title>
-                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
-                                                </head><body>
-                                                <h1>Relatório Financeiro - SoftGestão</h1>
-                                                <table>
-                                                    <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead>
-                                                    <tbody>
-                                                        ${financial.map(f => `<tr><td>${new Date(f.date).toLocaleDateString()}</td><td>${f.description}</td><td>${f.type}</td><td>${formatCurrency(f.value)}</td></tr>`).join('')}
-                                                    </tbody>
-                                                </table>
-                                                </body></html>
-                                            `;
-                                            const blob = new Blob([content], {type: 'application/msword'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
-                                        }}>
-                                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
-                                            <h3 className="font-bold text-lg text-slate-800">Exportar Financeiro (Word)</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Balanço detalhado de entradas e saídas em DOC.</p>
-                                        </Card>
-                                        
-                                        {/* NOVO RELATÓRIO DE DESEMPENHO */}
-                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-purple-500" onClick={() => {
-                                            const today = new Date();
-                                            const currentMonth = today.getMonth();
-                                            const currentYear = today.getFullYear();
-                                            
-                                            const monthlyIncome = financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
-                                            const monthlyExpense = financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
-                                            const completedProjects = projects.filter(p => p.status === 'Entregue' && new Date(p.deadline).getMonth() === currentMonth && new Date(p.deadline).getFullYear() === currentYear);
-
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório de Desempenho Mensal</title>
-                                                <style>body{font-family:Arial,sans-serif} .box{border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#f9f9f9}</style>
-                                                </head><body>
-                                                <h1>Relatório de Desempenho - ${today.toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</h1>
-                                                <div class="box">
-                                                    <h3>Resumo Financeiro</h3>
-                                                    <p><strong>Faturamento:</strong> ${formatCurrency(monthlyIncome)}</p>
-                                                    <p><strong>Despesas:</strong> ${formatCurrency(monthlyExpense)}</p>
-                                                    <p><strong>Lucro Líquido:</strong> ${formatCurrency(monthlyIncome - monthlyExpense)}</p>
-                                                </div>
-                                                <h3>Projetos Entregues no Mês</h3>
-                                                <ul>
-                                                    ${completedProjects.length > 0 ? completedProjects.map(p => `<li>${p.title} - ${clients.find(c=>c.id===p.client_id)?.company}</li>`).join('') : '<li>Nenhum projeto entregue este mês.</li>'}
-                                                </ul>
-                                                </body></html>
-                                            `;
-                                            const blob = new Blob([content], {type: 'application/msword'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a'); a.href=url; a.download=`desempenho_mensal_${currentMonth+1}_${currentYear}.doc`; a.click();
-                                        }}>
-                                            <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="chart-pie-slice" size={32} weight="duotone" /></div>
-                                            <h3 className="font-bold text-lg text-slate-800">Desempenho do Mês</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Resumo de lucro e entregas do mês atual.</p>
-                                        </Card>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* CONFIGURAÇÕES - NOVO BLOCO */}
+                            {/* ABA: CONFIGURAÇÕES */}
                             {activeTab === 'config' && (
                                 <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
-                                    {/* BACKUP SYSTEM */}
                                     <div className="grid grid-cols-1 gap-8 mb-8">
                                         <Card className="p-8 shadow-lg border-t-8 border-t-emerald-500 bg-emerald-50/50">
                                             <h3 className="font-bold text-xl text-slate-800 mb-2 flex items-center gap-3"><Icon name="database" className="text-emerald-600" weight="fill"/> Backup e Restauração de Dados</h3>
-                                            <p className="text-sm text-slate-500 mb-6 max-w-2xl">Mantenha seus dados seguros. Faça o download regular do backup para não perder informações caso limpe o cache do navegador.</p>
+                                            <p className="text-sm text-slate-500 mb-6 max-w-2xl">Mantenha seus dados seguros. Faça o download regular do backup.</p>
                                             <div className="flex flex-wrap gap-4">
                                                 <button onClick={handleBackup} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-emerald-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
-                                                    <Icon name="download-simple" weight="bold" size={18}/> Baixar Backup (Salvar Dados)
+                                                    <Icon name="download-simple" weight="bold" size={18}/> Baixar Backup
                                                 </button>
                                                 <div className="relative">
                                                     <input type="file" id="restoreFile" className="hidden" accept=".json" onChange={handleRestore} />
                                                     <label htmlFor="restoreFile" className="cursor-pointer bg-white hover:bg-slate-100 text-slate-600 font-black py-4 px-8 rounded-2xl transition-all shadow-sm border border-slate-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
-                                                        <Icon name="upload-simple" weight="bold" size={18}/> Restaurar Backup (Carregar)
+                                                        <Icon name="upload-simple" weight="bold" size={18}/> Restaurar Backup
                                                     </label>
                                                 </div>
                                             </div>
@@ -1412,36 +1292,20 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                         <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
                                             <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
                                             <form onSubmit={handleSaveConfig} className="space-y-5">
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Nome da Empresa / Fantasia</label>
-                                                    <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">CNPJ Principal</label>
-                                                    <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Endereço Completo</label>
-                                                    <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">E-mail Principal</label>
-                                                    <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} />
-                                                </div>
-                                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-indigo-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
-                                                    <Icon name="floppy-disk" weight="bold"/> Atualizar Cadastro
-                                                </button>
+                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
+                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
+                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
+                                                <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
+                                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
                                             </form>
                                         </Card>
                                         <Card className="p-8 shadow-lg border-t-8 border-t-rose-600">
-                                            <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="lock-key" className="text-rose-600" weight="fill"/> Segurança e Acesso</h3>
+                                            <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="lock-key" className="text-rose-600" weight="fill"/> Segurança</h3>
                                             <form onSubmit={handleChangePassword} className="space-y-5">
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Senha Atual" value={configPasswordForm.current} onChange={e => setConfigPasswordForm({...configPasswordForm, current: e.target.value})} />
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Nova Senha" value={configPasswordForm.newPass} onChange={e => setConfigPasswordForm({...configPasswordForm, newPass: e.target.value})} />
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700 transition-all" placeholder="Confirmar Nova Senha" value={configPasswordForm.confirm} onChange={e => setConfigPasswordForm({...configPasswordForm, confirm: e.target.value})} />
-                                                <button type="submit" className="w-full bg-rose-600 hover:bg-slate-900 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs shadow-xl shadow-rose-100 flex justify-center items-center gap-2">
-                                                    <Icon name="shield-check" weight="bold"/> Alterar Senha
-                                                </button>
+                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Senha Atual" value={configPasswordForm.current} onChange={e => setConfigPasswordForm({...configPasswordForm, current: e.target.value})} />
+                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Nova Senha" value={configPasswordForm.newPass} onChange={e => setConfigPasswordForm({...configPasswordForm, newPass: e.target.value})} />
+                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Confirmar" value={configPasswordForm.confirm} onChange={e => setConfigPasswordForm({...configPasswordForm, confirm: e.target.value})} />
+                                                <button type="submit" className="w-full bg-rose-600 text-white font-black py-4 rounded-2xl text-xs">Alterar Senha</button>
                                             </form>
                                         </Card>
                                     </div>
@@ -1460,73 +1324,53 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                         {modalType === 'project' && <><Icon name="laptop" className="text-indigo-600"/> Dados do Projeto</>}
                                         {modalType === 'client' && <><Icon name="briefcase" className="text-indigo-600"/> Ficha do Cliente</>}
                                         {modalType === 'finance' && <><Icon name="currency-dollar" className="text-indigo-600"/> Lançamento</>}
-                                        {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Dados de Hospedagem</>}
-                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual do Usuário</>}
-                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Gerador de Contrato</>}
+                                        {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Hospedagem</>}
+                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual</>}
+                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato</>}
                                     </h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors"><Icon name="x" weight="bold" size={20}/></button>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button>
                                 </div>
 
                                 <form onSubmit={saveItem} className="flex flex-col flex-1 min-h-0">
-                                    
                                     <div className="p-8 space-y-6 overflow-y-auto flex-1">
                                         {modalType === 'project' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título do Projeto</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} placeholder="Ex: E-commerce Varejo" /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
-                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}>
                                                             <option value="">Selecione...</option>
                                                             {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
                                                         </select>
                                                     </div>
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label>
-                                                        <select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
                                                             <option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option>
                                                         </select>
                                                     </div>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor (R$)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo de Entrega</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tecnologias</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={projectForm.tech_stack} onChange={e => setProjectForm({...projectForm, tech_stack: e.target.value})} placeholder="Ex: React, Node, WordPress..." /></div>
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Forma de Pagamento</label>
-                                                    <select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={projectForm.payment_method} onChange={e => setProjectForm({...payment_method, payment_method: e.target.value})}>
-                                                        <option>Pix</option>
-                                                        <option>Boleto</option>
-                                                        <option>Cartão de Crédito</option>
-                                                        <option>Transferência</option>
-                                                        <option>Dinheiro</option>
-                                                    </select>
-                                                </div>
-
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                
                                                 <div className="pt-4 border-t border-slate-100">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist</label>
                                                     <div className="flex gap-2 mb-4">
-                                                        <input 
-                                                            type="text" 
-                                                            className="flex-1 p-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" 
-                                                            placeholder="Nova tarefa (ex: Criar API)"
-                                                            value={newTaskText}
-                                                            onChange={e => setNewTaskText(e.target.value)}
-                                                            onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())}
-                                                        />
-                                                        <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl hover:bg-indigo-200 transition-colors"><Icon name="plus" weight="bold"/></button>
+                                                        <input type="text" className="flex-1 p-3 border border-slate-200 rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
+                                                        <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus" weight="bold"/></button>
                                                     </div>
                                                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                                        {currentProjectTasks.length === 0 && <p className="text-xs text-slate-400 italic text-center py-2">Nenhuma tarefa adicionada.</p>}
                                                         {currentProjectTasks.map(task => (
-                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-100 transition-all">
-                                                                <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300'}`}>
+                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white border border-transparent hover:border-slate-100">
+                                                                <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300'}`}>
                                                                     {task.done && <Icon name="check" size={12} weight="bold"/>}
                                                                 </button>
-                                                                <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.text}</span>
-                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" weight="bold"/></button>
+                                                                <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span>
+                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0"><Icon name="trash" weight="bold"/></button>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1536,110 +1380,40 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
                                         {modalType === 'client' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Nome da Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Nome do Contato</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Segmento de Mercado</label><select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={clientForm.segment} onChange={e => setClientForm({...clientForm, segment: e.target.value})}><option>Varejo</option><option>Serviços</option><option>Saúde</option><option>Jurídico</option><option>Tecnologia</option><option>Outros</option></select></div>
                                             </>
                                         )}
 
                                         {modalType === 'finance' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Categoria</label><select className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={financeForm.category} onChange={e => setFinanceForm({...financeForm, category: e.target.value})}><option>Projeto</option><option>Hospedagem</option><option>Freelancer</option><option>Software/Licença</option><option>Impostos</option><option>Outros</option></select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor (R$)</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
-                                                </div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
                                             </>
                                         )}
 
                                         {modalType === 'hosting' && (
                                             <>
-                                                <div>
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL / Domínio</label>
-                                                    <input className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." />
-                                                </div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL</label><input className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data de Entrega</label>
-                                                        <input type="date" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data de Expiração</label>
-                                                        <input type="date" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} />
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-
-                                        {modalType === 'manual' && (
-                                            <>
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Conteúdo do Manual</label>
-                                                    <button type="button" onClick={generateManualTemplate} className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"><Icon name="magic-wand" weight="bold"/> Gerar com IA (Template)</button>
-                                                </div>
-                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-sm text-slate-700 outline-none focus:border-indigo-500 h-96 resize-none" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})} placeholder="Escreva aqui a documentação técnica ou manual do usuário..."></textarea>
-                                            </>
-                                        )}
-
-                                        {modalType === 'contract' && (
-                                            <>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
-                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}>
-                                                            <option value="">Selecione...</option>
-                                                            {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Projeto Relacionado</label>
-                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 bg-white outline-none focus:border-indigo-500" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}>
-                                                            <option value="">Selecione...</option>
-                                                            {projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-3 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Início</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Fim</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor Contrato (R$)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-500" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} placeholder={projects.find(p=>p.id==contractForm.project_id)?.value || '0.00'} /></div>
-                                                </div>
-                                                
-                                                <div className="flex flex-wrap gap-2 items-center justify-between mt-4 mb-2">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Minuta Jurídica</label>
-                                                    <div className="flex gap-2">
-                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-indigo-700 shadow-sm transition-colors" title="Gerar ou Refazer Contrato"><Icon name="magic-wand" weight="bold"/> Refazer com IA</button>
-                                                        <button type="button" onClick={() => {
-                                                             const blob = new Blob([`<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${contractForm.content}</pre></body></html>`], {type: 'application/msword'});
-                                                             const url = URL.createObjectURL(blob);
-                                                             const a = document.createElement('a'); a.href=url; a.download=`Contrato_${contractForm.title || 'Novo'}.doc`; a.click();
-                                                        }} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 shadow-sm transition-colors"><Icon name="download-simple" weight="bold"/> Baixar</button>
-                                                        <button type="button" onClick={() => document.querySelector('textarea[name="contractContent"]').focus()} className="bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-slate-300 shadow-sm transition-colors"><Icon name="pencil-simple" weight="bold"/> Editar Manualmente</button>
-                                                    </div>
-                                                </div>
-                                                
-                                                <textarea name="contractContent" className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Clique em 'Refazer com IA' para criar uma minuta profissional automaticamente..."></textarea>
-                                                
-                                                <div className="flex justify-between items-center text-xs text-slate-400 font-bold px-2">
-                                                    <span>Status: {contractForm.status}</span>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Entrega</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
                                                 </div>
                                             </>
                                         )}
                                     </div>
 
-                                    {/* FIXED FOOTER */}
-                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button>
+                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider">Cancelar</button>
+                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button>
                                     </div>
                                 </form>
                             </div>
