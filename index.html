@@ -966,6 +966,10 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                                                 <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100" title="Editar Projeto">
                                                                     <Icon name="pencil-simple" weight="bold" size={16}/>
                                                                 </button>
+                                                                {/* NOVO BOTÃO: EDITAR SITE/URL */}
+                                                                <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100" title="Editar Site/URL">
+                                                                    <Icon name="globe" weight="bold" size={16}/>
+                                                                </button>
                                                                 <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100" title="Excluir Projeto">
                                                                     <Icon name="trash" weight="bold" size={16}/>
                                                                 </button>
