@@ -115,6 +115,13 @@
 
         const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
+        // --- UTILITY PARA CORREÇÃO DE DATA ---
+        const formatDateDisplay = (dateStr) => {
+            if (!dateStr) return '---';
+            // Garante que a data string YYYY-MM-DD seja lida como UTC para evitar erro de fuso horário
+            return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+        };
+
         // --- TELA DE LOGIN ---
         const LoginScreen = ({ onLogin }) => {
             const [user, setUser] = useState('');
@@ -538,7 +545,7 @@
                             <p>Recebemos a importância de <span class="val">${formatCurrency(item.value)}</span></p>
                             <p>Referente a: <strong>${item.description}</strong></p>
                             <p>Categoria: ${item.category}</p>
-                            <p>Data: ${new Date(item.date).toLocaleDateString()}</p>
+                            <p>Data: ${formatDateDisplay(item.date)}</p>
                             <br><br>
                             <p style="text-align:center">_____________________________</p>
                             <p style="text-align:center">${userData.name}</p>
@@ -580,8 +587,8 @@ Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 const value = parseFloat(contractForm.value || project.value || 0);
                 const fineValue = formatCurrency(value * 20);
                 
-                const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
-                const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
+                const startDateStr = formatDateDisplay(contractForm.start_date);
+                const endDateStr = contractForm.end_date ? formatDateDisplay(contractForm.end_date) : 'indeterminado';
 
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 ================================================================================
@@ -838,7 +845,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                             <div className="text-right flex items-center gap-4">
                                                                 <div className="text-right hidden sm:block">
                                                                     <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(p.status)}`}>{p.status}</span>
-                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {new Date(p.deadline).toLocaleDateString()}</p>
+                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {formatDateDisplay(p.deadline)}</p>
                                                                 </div>
                                                                 <div className="p-2 text-slate-300 group-hover:text-indigo-600 transition-colors"><Icon name="pencil-simple" weight="bold" /></div>
                                                             </div>
@@ -851,21 +858,24 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                         <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
                                             <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas e Avisos</h3>
                                             <div className="space-y-4">
-                                                {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').map(p => (
+                                                {projects.filter(p => {
+                                                    const deadlineDate = new Date(p.deadline + 'T00:00:00');
+                                                    return deadlineDate < new Date() && p.status !== 'Entregue';
+                                                }).map(p => (
                                                     <div key={`delay-${p.id}`} onClick={() => openModal('project', p)} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-rose-500/20 transition-colors">
                                                         <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
                                                         <div>
                                                             <p className="text-sm font-bold text-rose-400">Prazo Excedido</p>
-                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {new Date(p.deadline).toLocaleDateString()}.</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {formatDateDisplay(p.deadline)}.</p>
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
+                                                {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date + 'T00:00:00') - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
                                                     <div key={`exp-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
                                                         <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
                                                         <div>
                                                             <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
-                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em breve.</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em {formatDateDisplay(p.expiration_date)}.</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -974,7 +984,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                     <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
                                                         <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
                                                         <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
-                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span></div>
+                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDateDisplay(p.deadline)}</span></div>
                                                     </div>
                                                 </div>
                                             </Card>
@@ -1019,7 +1029,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                     </div>
                                                 </div>
                                                 <h3 className="text-lg font-black text-slate-800">{c.title}</h3>
-                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {new Date(c.start_date).toLocaleDateString()}</p>
+                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {formatDateDisplay(c.start_date)}</p>
                                             </Card>
                                         ))}
                                     </div>
@@ -1038,7 +1048,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             <h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>
                                             {financial.filter(f => f.type === 'Receita').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
-                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div>
                                                     <span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
@@ -1047,7 +1057,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             <h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>
                                             {financial.filter(f => f.type === 'Despesa').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
-                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div>
                                                     <span className="font-bold text-rose-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
@@ -1267,4 +1277,3 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
     </script>
 </body>
 </html>
-
