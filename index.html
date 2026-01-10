@@ -593,17 +593,43 @@ Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 ================================================================================
 
+IDENTIFICAÇÃO DAS PARTES
+
 CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
-CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}.
+
+CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.
 
 CLÁUSULA PRIMEIRA - DO OBJETO
-1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software denominado "${project.title}".
+1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software/sistema denominado "${project.title}" ("SOFTWARE"), bem como a prestação de serviços de suporte técnico relacionados.
 
-CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
-2.1. Todo o código-fonte é de propriedade intelectual da CONTRATADA.
-2.2. A revenda ou cópia não autorizada sujeita o infrator a multa de ${fineValue}.
+CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
+2.1. Todo o código-fonte, estruturas de banco de dados, design interfaces e demais elementos do SOFTWARE são de propriedade exclusiva e inalienável da CONTRATADA, sendo protegidos pela Lei de Software (Lei nº 9.609/98) e Lei de Direitos Autorais (Lei nº 9.610/98).
+2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, exclusiva e intransferível.
+2.3. É ESTRITAMENTE VEDADO à CONTRATANTE:
+    a) Vender, revender, alugar, sublicenciar ou ceder o SOFTWARE a terceiros, a título oneroso ou gratuito.
+    b) Utilizar o SOFTWARE para criar produtos derivados ou concorrentes (Engenharia Reversa).
+    c) Remover ou alterar avisos de direitos autorais ou marcas comerciais da CONTRATADA.
+2.4. A CONTRATANTE reconhece que o SOFTWARE não é um produto "White Label" (marca branca), salvo se houver aditivo contratual específico e oneroso para tal fim.
 
-... (resto do contrato)
+CLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS
+3.1. O descumprimento de qualquer cláusula deste contrato sujeitará a parte infratora ao pagamento de multa compensatória correspondente a 50% (cinquenta por cento) do valor total do contrato.
+3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).
+
+CLÁUSULA QUARTA - DO VALOR E FORMA DE PAGAMENTO
+4.1. Pelos serviços objeto deste contrato, a CONTRATANTE pagará à CONTRATADA o valor total de ${formatCurrency(value)}.
+
+CLÁUSULA QUINTA - DA CONFIDENCIALIDADE
+5.1. As partes comprometem-se a manter o mais absoluto sigilo sobre quaisquer dados, materiais, documentos, especificações técnicas ou comerciais e inovações de que venham a ter acesso ou conhecimento.
+
+CLÁUSULA SEXTA - DA VIGÊNCIA
+6.1. O presente contrato entra em vigor em ${startDateStr} e terá validade até ${endDateStr}, podendo ser renovado mediante termo aditivo.
+
+CLÁUSULA SÉTIMA - DO FORO
+7.1. Fica eleito o foro da Comarca de SÃO PAULO/SP para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro.
+
+E, por estarem assim justos e contratados, geram este instrumento eletronicamente.
+
+Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 `;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
