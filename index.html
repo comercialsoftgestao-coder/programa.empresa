@@ -1121,7 +1121,8 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 
                             {/* CONFIGURAÇÕES */}
                             {activeTab === 'config' && (
-                                <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
+                                <div className="space-y-8 animate-fade-in max-w-5xl mx-auto pb-12">
+                                    {/* DADOS CORPORATIVOS */}
                                     <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
                                         <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
                                         <form onSubmit={handleSaveConfig} className="space-y-5">
@@ -1132,6 +1133,41 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                             <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
                                         </form>
                                     </Card>
+
+                                    {/* SEGURANÇA E ACESSO */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600 h-fit">
+                                            <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="lock-key" className="text-indigo-600" weight="fill"/> Alterar Senha de Acesso</h3>
+                                            <form onSubmit={handleChangePassword} className="space-y-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Senha Atual</label>
+                                                    <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={configPasswordForm.current} onChange={e => setConfigPasswordForm({...configPasswordForm, current: e.target.value})} placeholder="••••••••" />
+                                                </div>
+                                                <div className="pt-4 border-t border-slate-100">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Nova Senha</label>
+                                                    <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={configPasswordForm.newPass} onChange={e => setConfigPasswordForm({...configPasswordForm, newPass: e.target.value})} placeholder="No mínimo 4 caracteres" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Confirmar Nova Senha</label>
+                                                    <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={configPasswordForm.confirm} onChange={e => setConfigPasswordForm({...configPasswordForm, confirm: e.target.value})} placeholder="Repita a nova senha" />
+                                                </div>
+                                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs uppercase tracking-widest transition-all">Salvar Nova Senha</button>
+                                            </form>
+                                        </Card>
+
+                                        <Card className="p-8 shadow-lg border-t-8 border-t-indigo-400 bg-slate-50 flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="font-bold text-xl text-slate-800 mb-4 flex items-center gap-3"><Icon name="lifebuoy" className="text-indigo-600" weight="fill"/> Recuperação de Acesso</h3>
+                                                <p className="text-sm text-slate-500 leading-relaxed mb-6">Caso tenha perdido ou esquecido as credenciais de acesso, você pode solicitar uma instrução de recuperação manual. Como o sistema utiliza banco de dados na nuvem, a segurança é priorizada.</p>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <button onClick={() => showToast("Para recuperar sua senha, contate o suporte administrativo.", "info")} className="w-full py-4 px-6 bg-white border-2 border-indigo-100 text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-center gap-2">
+                                                    <Icon name="question" weight="bold"/> Esqueci minha senha
+                                                </button>
+                                                <p className="text-[10px] text-center text-slate-400 font-bold uppercase">Nota: A alteração surtirá efeito no próximo login.</p>
+                                            </div>
+                                        </Card>
+                                    </div>
                                 </div>
                             )}
 
@@ -1233,7 +1269,6 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                             </>
                                         )}
 
-                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE MANUAL */}
                                         {modalType === 'manual' && (
                                             <>
                                                 <div className="flex justify-between items-center mb-2">
@@ -1244,7 +1279,6 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                             </>
                                         )}
 
-                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE CONTRATO */}
                                         {modalType === 'contract' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
