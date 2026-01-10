@@ -115,6 +115,15 @@
 
         const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
+        // FUNÇÃO PARA CORRIGIR O BUG DAS DATAS (Formata string YYYY-MM-DD para DD/MM/YYYY sem erro de fuso horário)
+        const formatDisplayDate = (dateStr) => {
+            if (!dateStr) return '-';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            const [year, month, day] = parts;
+            return `${day}/${month}/${year}`;
+        };
+
         // --- TELA DE LOGIN ---
         const LoginScreen = ({ onLogin }) => {
             const [user, setUser] = useState('');
@@ -538,7 +547,7 @@
                             <p>Recebemos a importância de <span class="val">${formatCurrency(item.value)}</span></p>
                             <p>Referente a: <strong>${item.description}</strong></p>
                             <p>Categoria: ${item.category}</p>
-                            <p>Data: ${new Date(item.date).toLocaleDateString()}</p>
+                            <p>Data: ${formatDisplayDate(item.date)}</p>
                             <br><br>
                             <p style="text-align:center">_____________________________</p>
                             <p style="text-align:center">${userData.name}</p>
@@ -580,8 +589,8 @@ Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 const value = parseFloat(contractForm.value || project.value || 0);
                 const fineValue = formatCurrency(value * 20);
                 
-                const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
-                const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
+                const startDateStr = contractForm.start_date ? formatDisplayDate(contractForm.start_date) : '___/___/___';
+                const endDateStr = contractForm.end_date ? formatDisplayDate(contractForm.end_date) : 'indeterminado';
 
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 ================================================================================
@@ -592,12 +601,7 @@ CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no
 CLÁUSULA PRIMEIRA - DO OBJETO
 1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software denominado "${project.title}".
 
-CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
-2.1. Todo o código-fonte é de propriedade intelectual da CONTRATADA.
-2.2. A revenda ou cópia não autorizada sujeita o infrator a multa de ${fineValue}.
-
-... (resto do contrato)
-`;
+...`;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
             };
@@ -750,6 +754,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                 <div>
                                     <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
                                 </div>
+                                {/* BARRA DE PESQUISA GLOBAL */}
                                 {['projects', 'clients', 'contracts', 'finance', 'deploy', 'monitoring'].includes(activeTab) && (
                                     <div className="hidden md:flex flex-1 max-w-md ml-8 relative">
                                         <span className="absolute left-3 top-2.5 text-slate-400"><Icon name="magnifying-glass" weight="bold"/></span>
@@ -811,7 +816,6 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                         </Card>
                                     </div>
 
-                                    {/* GRÁFICO E LISTAS */}
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                         <div className="col-span-2 space-y-8">
                                             <Card className="p-8 card-hover">
@@ -838,7 +842,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                             <div className="text-right flex items-center gap-4">
                                                                 <div className="text-right hidden sm:block">
                                                                     <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(p.status)}`}>{p.status}</span>
-                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {new Date(p.deadline).toLocaleDateString()}</p>
+                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {formatDisplayDate(p.deadline)}</p>
                                                                 </div>
                                                                 <div className="p-2 text-slate-300 group-hover:text-indigo-600 transition-colors"><Icon name="pencil-simple" weight="bold" /></div>
                                                             </div>
@@ -856,16 +860,27 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                         <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
                                                         <div>
                                                             <p className="text-sm font-bold text-rose-400">Prazo Excedido</p>
-                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {new Date(p.deadline).toLocaleDateString()}.</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {formatDisplayDate(p.deadline)}.</p>
                                                         </div>
                                                     </div>
                                                 ))}
+
                                                 {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
                                                     <div key={`exp-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
                                                         <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
                                                         <div>
                                                             <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
-                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em breve.</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em breve ({formatDisplayDate(p.expiration_date)}).</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {financial.filter(f => f.status === 'Pendente').map(f => (
+                                                    <div key={`fin-${f.id}`} onClick={() => openModal('finance', f)} className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-amber-500/20 transition-colors">
+                                                        <Icon name="currency-circle-dollar" className="text-amber-500 mt-1" weight="fill"/>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-amber-500">Pagamento Pendente</p>
+                                                            <p className="text-xs text-slate-400 mt-1">{f.description} - {formatCurrency(f.value)}</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -881,7 +896,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                     <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                                         <div>
                                             <h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2>
-                                            <p className="text-sm text-slate-500 mt-1">Verificação de disponibilidade dos sites ativos.</p>
+                                            <p className="text-sm text-slate-500 mt-1">Verificação de disponibilidade automática.</p>
                                         </div>
                                         <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
                                             <Icon name="arrows-clockwise" weight="bold"/> Verificar Novamente
@@ -889,7 +904,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                        {projects.filter(p => p.hosting_url).map(p => {
+                                        {projects.filter(p => p.hosting_url && (p.title.toLowerCase().includes(searchTerm.toLowerCase()))).map(p => {
                                             const isChecked = dailyChecks[p.id];
                                             const status = projectStatus[p.id] || 'checking';
 
@@ -903,15 +918,17 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                             {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Offline</div>}
                                                         </div>
                                                         <div className="flex items-center gap-1">
-                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="pencil-simple" weight="bold" size={16}/></button>
-                                                            <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="globe" weight="bold" size={16}/></button>
-                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash" weight="bold" size={16}/></button>
-                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button>
+                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 transition-all opacity-0 group-hover:opacity-100" title="Editar Projeto"><Icon name="pencil-simple" size={16}/></button>
+                                                            <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 transition-all opacity-0 group-hover:opacity-100" title="Editar URL"><Icon name="globe" size={16}/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100" title="Excluir"><Icon name="trash" size={16}/></button>
+                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" size={16}/></button>
                                                         </div>
                                                     </div>
-                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3>
+                                                    <h3 className="font-bold text-slate-800 truncate" title={p.title}>{p.title}</h3>
                                                     <p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">ABRIR SITE</a>
+                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all group/btn">
+                                                        ABRIR SITE <Icon name="arrow-square-out" className="group-hover/btn:translate-x-1 transition-transform"/>
+                                                    </a>
                                                 </Card>
                                             );
                                         })}
@@ -923,29 +940,22 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                             {activeTab === 'clients' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
-                                            <p className="text-sm text-slate-500">Empresas e parceiros cadastrados.</p>
-                                        </div>
-                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button>
+                                        <div><h2 className="text-xl font-bold text-slate-800">Clientes</h2></div>
+                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar</button>
                                     </div>
                                     <Card className="overflow-hidden">
                                         <table className="w-full text-left">
                                             <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
-                                                <tr>
-                                                    <th className="p-5">Empresa</th>
-                                                    <th className="p-5">Contato</th>
-                                                    <th className="p-5 text-center">Ações</th>
-                                                </tr>
+                                                <tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100">
+                                            <tbody className="divide-y divide-slate-100 text-sm">
                                                 {clients.filter(c => c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold">
-                                                        <td className="p-5">{c.company}</td>
+                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-5 font-bold">{c.company}</td>
                                                         <td className="p-5">{c.email}</td>
                                                         <td className="p-5 flex justify-center gap-2">
-                                                            <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
-                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                            <button onClick={() => openModal('client', c)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Icon name="trash" weight="bold"/></button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -974,7 +984,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                     <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
                                                         <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
                                                         <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
-                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span></div>
+                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDisplayDate(p.deadline)}</span></div>
                                                     </div>
                                                 </div>
                                             </Card>
@@ -993,7 +1003,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                 <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
                                                 <div className="grid grid-cols-2 gap-3 mt-4">
                                                     <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
-                                                    <button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button>
+                                                    <button onClick={() => openModal('manual', p)} className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${p.manual_content ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}><Icon name="book-bookmark" weight="bold"/> Manual</button>
                                                 </div>
                                             </Card>
                                         ))}
@@ -1019,7 +1029,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                     </div>
                                                 </div>
                                                 <h3 className="text-lg font-black text-slate-800">{c.title}</h3>
-                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {new Date(c.start_date).toLocaleDateString()}</p>
+                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Início: {formatDisplayDate(c.start_date)}</p>
                                             </Card>
                                         ))}
                                     </div>
@@ -1038,7 +1048,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             <h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>
                                             {financial.filter(f => f.type === 'Receita').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
-                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDisplayDate(f.date)}</p></div>
                                                     <span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
@@ -1047,7 +1057,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             <h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>
                                             {financial.filter(f => f.type === 'Despesa').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
-                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDisplayDate(f.date)}</p></div>
                                                     <span className="font-bold text-rose-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
@@ -1062,7 +1072,8 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                     <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-indigo-500" onClick={() => {
-                                            const content = `<html><body><h1>Relatório de Projetos</h1>...</body></html>`;
+                                            const tableRows = projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c=>c.id===p.client_id)?.company || '-'}</td><td>${formatCurrency(p.value)}</td><td>${formatDisplayDate(p.deadline)}</td></tr>`).join('');
+                                            const content = `<html><body><h1>Relatório de Projetos</h1><table border="1">${tableRows}</table></body></html>`;
                                             const blob = new Blob([content], {type: 'application/msword'});
                                             const url = URL.createObjectURL(blob);
                                             const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
@@ -1071,7 +1082,8 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             <h3 className="font-bold text-lg text-slate-800">Exportar Projetos (Word)</h3>
                                         </Card>
                                         <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-emerald-500" onClick={() => {
-                                            const content = `<html><body><h1>Relatório Financeiro</h1>...</body></html>`;
+                                            const tableRows = financial.map(f => `<tr><td>${f.description}</td><td>${f.type}</td><td>${formatCurrency(f.value)}</td><td>${formatDisplayDate(f.date)}</td></tr>`).join('');
+                                            const content = `<html><body><h1>Relatório Financeiro</h1><table border="1">${tableRows}</table></body></html>`;
                                             const blob = new Blob([content], {type: 'application/msword'});
                                             const url = URL.createObjectURL(blob);
                                             const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
@@ -1122,27 +1134,27 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                     <div className="p-8 space-y-6 overflow-y-auto flex-1">
                                         {modalType === 'project' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
-                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-semibold" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}>
                                                             <option value="">Selecione...</option>
                                                             {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
                                                         </select>
                                                     </div>
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label>
-                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white font-semibold" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
                                                             <option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option>
                                                         </select>
                                                     </div>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white font-semibold" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo de Entrega</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
                                                 
                                                 <div className="pt-4 border-t border-slate-100">
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
@@ -1152,11 +1164,11 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                     </div>
                                                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                                                         {currentProjectTasks.map(task => (
-                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white border border-transparent hover:border-slate-100">
+                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white border border-transparent hover:border-slate-100 transition-all">
                                                                 <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300'}`}>
                                                                     {task.done && <Icon name="check" size={12} weight="bold"/>}
                                                                 </button>
-                                                                <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span>
+                                                                <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.text}</span>
                                                                 <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0 transition-all"><Icon name="trash" weight="bold"/></button>
                                                             </div>
                                                         ))}
@@ -1167,7 +1179,7 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
 
                                         {modalType === 'client' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
@@ -1197,7 +1209,6 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             </>
                                         )}
 
-                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE MANUAL */}
                                         {modalType === 'manual' && (
                                             <>
                                                 <div className="flex justify-between items-center mb-2">
@@ -1208,7 +1219,6 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                             </>
                                         )}
 
-                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE CONTRATO */}
                                         {modalType === 'contract' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
@@ -1235,17 +1245,10 @@ CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
                                                 <div className="flex justify-between items-center mb-2 mt-4">
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Minuta Jurídica</label>
                                                     <div className="flex gap-2">
-                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-indigo-700 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Minuta Jurídica</button>
-                                                        {editingItem && (
-                                                            <button type="button" onClick={() => {
-                                                                const blob = new Blob([`<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${contractForm.content}</pre></body></html>`], {type: 'application/msword'});
-                                                                const url = URL.createObjectURL(blob);
-                                                                const a = document.createElement('a'); a.href=url; a.download=`Contrato_${editingItem.title}.doc`; a.click();
-                                                            }} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-emerald-700 transition-all"><Icon name="download-simple" weight="bold"/> Baixar DOC</button>
-                                                        )}
+                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-indigo-700 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Minuta</button>
                                                     </div>
                                                 </div>
-                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Clique em 'Gerar Minuta' ou escreva o texto do contrato aqui..."></textarea>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Escreva o texto do contrato aqui..."></textarea>
                                             </>
                                         )}
                                     </div>
