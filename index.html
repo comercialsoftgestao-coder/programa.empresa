@@ -552,8 +552,23 @@
 
             const generateManualTemplate = () => {
                 if (!editingItem) return;
-                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n...\n`;
+                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}
+
+1. INTRODUÇÃO
+Este sistema foi desenvolvido para facilitar a gestão de sua empresa...
+
+2. ACESSO
+Para acessar, utilize sua URL e credenciais fornecidas...
+
+3. FUNCIONALIDADES
+- Cadastro de Itens
+- Relatórios
+- Monitoramento em tempo real
+
+4. SUPORTE
+Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 setManualForm({ content: template });
+                showToast('Template de manual gerado!', 'success');
             };
             
             const generateLegalContract = () => {
@@ -570,13 +585,18 @@
 
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 ================================================================================
+
 CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
 CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}.
 
 CLÁUSULA PRIMEIRA - DO OBJETO
 1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software denominado "${project.title}".
 
-... (resto do contrato omitido para brevidade)
+CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
+2.1. Todo o código-fonte é de propriedade intelectual da CONTRATADA.
+2.2. A revenda ou cópia não autorizada sujeita o infrator a multa de ${fineValue}.
+
+... (resto do contrato)
 `;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
@@ -730,7 +750,6 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                 <div>
                                     <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
                                 </div>
-                                {/* BARRA DE PESQUISA GLOBAL */}
                                 {['projects', 'clients', 'contracts', 'finance', 'deploy', 'monitoring'].includes(activeTab) && (
                                     <div className="hidden md:flex flex-1 max-w-md ml-8 relative">
                                         <span className="absolute left-3 top-2.5 text-slate-400"><Icon name="magnifying-glass" weight="bold"/></span>
@@ -832,7 +851,6 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                         <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
                                             <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas e Avisos</h3>
                                             <div className="space-y-4">
-                                                {/* ALERTA DE PRAZO DE ENTREGA */}
                                                 {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').map(p => (
                                                     <div key={`delay-${p.id}`} onClick={() => openModal('project', p)} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-rose-500/20 transition-colors">
                                                         <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
@@ -842,276 +860,106 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                                         </div>
                                                     </div>
                                                 ))}
-
-                                                {/* ALERTA DE EXPIRAÇÃO DE HOSPEDAGEM/CONTRATO */}
-                                                {projects.filter(p => p.expiration_date).map(p => {
-                                                    const days = Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24));
-                                                    if (days < 0) {
-                                                        return (
-                                                            <div key={`exp-expired-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-red-900/30 transition-colors">
-                                                                <Icon name="x-circle" className="text-red-500 mt-1" weight="fill"/>
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-red-400">Hospedagem Vencida</p>
-                                                                    <p className="text-xs text-slate-400 mt-1">A renovação de <strong>{p.title}</strong> expirou há {Math.abs(days)} dias.</p>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    } else if (days <= 30) {
-                                                        return (
-                                                            <div key={`exp-warning-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
-                                                                <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
-                                                                    <p className="text-xs text-slate-400 mt-1">A hospedagem de <strong>{p.title}</strong> vence em {days} dias ({new Date(p.expiration_date).toLocaleDateString()}).</p>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })}
-
-                                                {/* ALERTA FINANCEIRO */}
-                                                {financial.filter(f => f.status === 'Pendente').map(f => (
-                                                    <div key={`fin-${f.id}`} onClick={() => openModal('finance', f)} className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-amber-500/20 transition-colors">
-                                                        <Icon name="currency-circle-dollar" className="text-amber-500 mt-1" weight="fill"/>
+                                                {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
+                                                    <div key={`exp-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
+                                                        <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
                                                         <div>
-                                                            <p className="text-sm font-bold text-amber-500">Pagamento Pendente</p>
-                                                            <p className="text-xs text-slate-400 mt-1">{f.description} - {formatCurrency(f.value)}</p>
+                                                            <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em breve.</p>
                                                         </div>
                                                     </div>
                                                 ))}
-
-                                                {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').length === 0 && 
-                                                 financial.filter(f => f.status === 'Pendente').length === 0 && 
-                                                 projects.filter(p => p.expiration_date && Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30).length === 0 &&
-                                                 <div className="text-center py-4">
-                                                    <Icon name="check-circle" className="text-emerald-500 mx-auto mb-2" size={32} weight="duotone"/>
-                                                    <p className="text-sm text-slate-500">Tudo em dia! Nenhum alerta pendente.</p>
-                                                 </div>
-                                                }
                                             </div>
                                         </Card>
                                     </div>
                                 </div>
                             )}
 
-                            {/* ABA: MONITORAMENTO DIÁRIO DE LINKS */}
+                            {/* MONITORAMENTO */}
                             {activeTab === 'monitoring' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                                         <div>
                                             <h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2>
-                                            <p className="text-sm text-slate-500 mt-1">
-                                                Verificação automática de disponibilidade.
-                                                <span className="block text-[10px] text-slate-400 mt-1">*Verde = Servidor Respondeu. Vermelho = Sem Conexão/Erro de DNS.</span>
-                                            </p>
+                                            <p className="text-sm text-slate-500 mt-1">Verificação de disponibilidade dos sites ativos.</p>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
-                                                <Icon name="arrows-clockwise" weight="bold"/> Verificar Novamente
-                                            </button>
-                                            <div className="w-full md:w-auto bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-                                                <div className="text-right">
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Links Verificados Hoje</p>
-                                                    <p className="text-lg font-black text-slate-800">
-                                                        {Object.keys(dailyChecks).filter(k => dailyChecks[k]).length} <span className="text-slate-300">/</span> {projects.filter(p => p.hosting_url).length}
-                                                    </p>
-                                                </div>
-                                                <div className="w-12 h-12 relative flex items-center justify-center">
-                                                    <svg className="w-full h-full transform -rotate-90">
-                                                        <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-100" />
-                                                        <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" 
-                                                            strokeDasharray={2 * Math.PI * 20} 
-                                                            strokeDashoffset={2 * Math.PI * 20 * (1 - (projects.filter(p => p.hosting_url).length > 0 ? Object.keys(dailyChecks).filter(k => dailyChecks[k]).length / projects.filter(p => p.hosting_url).length : 0))} 
-                                                            className="text-emerald-500 transition-all duration-1000 ease-out" 
-                                                        />
-                                                    </svg>
-                                                    <Icon name="check" size={16} weight="bold" className="absolute text-emerald-600"/>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
+                                            <Icon name="arrows-clockwise" weight="bold"/> Verificar Novamente
+                                        </button>
                                     </div>
 
-                                    {projects.filter(p => p.hosting_url).length === 0 ? (
-                                        <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                                            <Icon name="link-break" size={48} className="text-slate-300 mx-auto mb-4"/>
-                                            <h3 className="text-lg font-bold text-slate-500">Nenhum link cadastrado</h3>
-                                            <p className="text-sm text-slate-400">Adicione URLs de hospedagem aos seus projetos para monitorá-los aqui.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            {projects.filter(p => p.hosting_url && (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || (clients.find(c => c.id === p.client_id)?.company || '').toLowerCase().includes(searchTerm.toLowerCase()))).map(p => {
-                                                const isChecked = dailyChecks[p.id];
-                                                const status = projectStatus[p.id] || 'checking';
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {projects.filter(p => p.hosting_url).map(p => {
+                                            const isChecked = dailyChecks[p.id];
+                                            const status = projectStatus[p.id] || 'checking';
 
-                                                return (
-                                                    <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
-                                                        
-                                                        {/* Status Indicator Bar */}
-                                                        <div className={`absolute top-0 left-0 right-0 h-1 
-                                                            ${status === 'checking' ? 'bg-blue-500 animate-pulse' : ''} 
-                                                            ${status === 'online' ? 'bg-emerald-500' : ''} 
-                                                            ${status === 'offline' ? 'bg-red-500' : ''}
-                                                        `}></div>
-
-                                                        <div className="flex justify-between items-start mb-3">
-                                                            <div className="flex items-center gap-2">
-                                                                {status === 'checking' && <Icon name="spinner" className="animate-spin text-blue-500" weight="bold" />}
-                                                                {status === 'online' && <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Online</div>}
-                                                                {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase"><Icon name="warning" weight="fill" size={10}/> Offline</div>}
-                                                            </div>
-                                                            
-                                                            <div className="flex items-center gap-1">
-                                                                <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100" title="Editar Projeto">
-                                                                    <Icon name="pencil-simple" weight="bold" size={16}/>
-                                                                </button>
-                                                                <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100" title="Editar Site/URL">
-                                                                    <Icon name="globe" weight="bold" size={16}/>
-                                                                </button>
-                                                                <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100" title="Excluir Projeto">
-                                                                    <Icon name="trash" weight="bold" size={16}/>
-                                                                </button>
-                                                                <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 scale-110' : 'bg-slate-100 text-slate-300 hover:bg-slate-200'}`} title={isChecked ? "Verificado hoje" : "Marcar verificado"}>
-                                                                    <Icon name="check" weight="bold" size={16}/>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <h3 className="font-bold text-slate-800 truncate" title={p.title}>{p.title}</h3>
-                                                        <p className="text-xs text-slate-500 mb-4 truncate">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                        
-                                                        <div className="bg-white rounded-lg border border-slate-100 p-2 mb-4 flex items-center gap-2">
-                                                            <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : (status === 'offline' ? 'bg-red-500' : 'bg-blue-400')}`}></div>
-                                                            <p className="text-xs font-mono text-slate-600 truncate flex-1">{p.hosting_url}</p>
-                                                        </div>
-
-                                                        <a href={p.hosting_url} target="_blank" onClick={() => !isChecked && toggleDailyCheck(p.id)} className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md group">
-                                                            <span>ABRIR SITE</span> <Icon name="arrow-square-out" weight="bold" className="group-hover:translate-x-1 transition-transform"/>
-                                                        </a>
-                                                    </Card>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* ABA: ENTREGAS & MANUAIS */}
-                            {activeTab === 'deploy' && (
-                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-800">Entregas & Manuais</h2>
-                                            <p className="text-sm text-slate-500 mt-1">Gestão de hospedagem, domínios e documentação técnica</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()) || (clients.find(c => c.id === p.client_id)?.company || '').toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
-                                            const daysToExpire = p.expiration_date ? Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-                                            const expireStatus = daysToExpire === null ? 'none' : (daysToExpire < 0 ? 'expired' : (daysToExpire < 30 ? 'warning' : 'ok'));
-                                            
                                             return (
-                                                <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500 flex flex-col">
-                                                    <div className="p-6 flex-1">
-                                                        <div className="flex justify-between items-start mb-4">
-                                                            <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
-                                                            <a href={p.hosting_url || '#'} target="_blank" className={`text-slate-400 hover:text-indigo-600 ${!p.hosting_url && 'opacity-50 pointer-events-none'}`}><Icon name="arrow-square-out" weight="bold" size={20}/></a>
+                                                <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
+                                                    <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'checking' ? 'bg-blue-500 animate-pulse' : (status === 'online' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {status === 'checking' && <Icon name="spinner" className="animate-spin text-blue-500" weight="bold" />}
+                                                            {status === 'online' && <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Online</div>}
+                                                            {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Offline</div>}
                                                         </div>
-                                                        <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
-                                                        <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                        
-                                                        {p.hosting_url ? (
-                                                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-4">
-                                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Hospedagem</p>
-                                                                <p className="text-xs font-bold text-indigo-600 truncate mb-2">{p.hosting_url}</p>
-                                                                <div className="flex justify-between items-center text-[10px] uppercase font-bold text-slate-500">
-                                                                    <span>Expira em: {new Date(p.expiration_date).toLocaleDateString()}</span>
-                                                                    {expireStatus === 'expired' && <span className="text-red-500">VENCIDO</span>}
-                                                                    {expireStatus === 'warning' && <span className="text-amber-500">RENOVAR</span>}
-                                                                    {expireStatus === 'ok' && <span className="text-emerald-500">ATIVO</span>}
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-4 border-dashed border-slate-300 flex items-center justify-center h-20">
-                                                                <p className="text-xs font-bold text-slate-400">Sem dados de hospedagem</p>
-                                                            </div>
-                                                        )}
-
-                                                        <div className="grid grid-cols-2 gap-3 mt-4">
-                                                            <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
-                                                            <button onClick={() => openModal('manual', p)} className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${p.manual_content ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}><Icon name="book-bookmark" weight="bold"/> Manual</button>
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="pencil-simple" weight="bold" size={16}/></button>
+                                                            <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="globe" weight="bold" size={16}/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash" weight="bold" size={16}/></button>
+                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button>
                                                         </div>
                                                     </div>
+                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3>
+                                                    <p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">ABRIR SITE</a>
                                                 </Card>
                                             );
                                         })}
                                     </div>
                                 </div>
                             )}
-                            
-                            {/* ABA: CONTRATOS JURÍDICOS */}
-                            {activeTab === 'contracts' && (
-                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <div>
-                                            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2"><Icon name="scroll" className="text-indigo-600"/> Contratos Jurídicos</h2>
-                                            <p className="text-sm text-slate-500 mt-1">Gestão de minutas, assinaturas e proteção de IP</p>
-                                        </div>
-                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 shadow-lg shadow-slate-900/20 transform hover:-translate-y-1 transition-all">
-                                            <Icon name="plus" weight="bold"/> NOVO CONTRATO
-                                        </button>
-                                    </div>
 
-                                    {contracts.length === 0 ? (
-                                        <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                                            <Icon name="file-dashed" size={48} className="text-slate-300 mx-auto mb-4"/>
-                                            <h3 className="text-lg font-bold text-slate-500">Nenhum contrato gerado</h3>
-                                            <p className="text-sm text-slate-400">Crie seu primeiro contrato profissional agora.</p>
+                            {/* CLIENTES */}
+                            {activeTab === 'clients' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
+                                            <p className="text-sm text-slate-500">Empresas e parceiros cadastrados.</p>
                                         </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {contracts.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                                                <Card key={c.id} className="p-6 relative group overflow-hidden border-l-4 border-l-indigo-600">
-                                                    <div className="flex justify-between items-start mb-4">
-                                                        <div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase tracking-wide text-slate-600 border border-slate-200">{c.status}</div>
-                                                        <div className="flex gap-2">
-                                                            <button onClick={() => {
-                                                                const blob = new Blob([`<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${c.content}</pre></body></html>`], {type: 'application/msword'});
-                                                                const url = URL.createObjectURL(blob);
-                                                                const a = document.createElement('a'); a.href=url; a.download=`Contrato_${c.title}.doc`; a.click();
-                                                            }} className="p-2 text-slate-400 hover:text-indigo-600 bg-white rounded-lg border border-slate-100 shadow-sm" title="Baixar DOC"><Icon name="download-simple" weight="bold"/></button>
-                                                            <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 bg-white rounded-lg border border-slate-100 shadow-sm"><Icon name="pencil-simple" weight="bold"/></button>
-                                                            <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 bg-white rounded-lg border border-slate-100 shadow-sm"><Icon name="trash" weight="bold"/></button>
-                                                        </div>
-                                                    </div>
-                                                    <h3 className="text-lg font-black text-slate-800 mb-1">{c.title}</h3>
-                                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide mb-6">Criado em: {new Date(c.start_date).toLocaleDateString()}</p>
-                                                    <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 flex items-start gap-2">
-                                                        <Icon name="shield-check" className="text-amber-500 mt-0.5" weight="fill"/>
-                                                        <div>
-                                                            <p className="text-[10px] font-bold text-amber-700 uppercase">Segurança Jurídica Ativa</p>
-                                                            <p className="text-[10px] text-amber-600/80">Inclui cláusula anti-revenda e multa punitiva.</p>
-                                                        </div>
-                                                    </div>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )}
+                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button>
+                                    </div>
+                                    <Card className="overflow-hidden">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                                <tr>
+                                                    <th className="p-5">Empresa</th>
+                                                    <th className="p-5">Contato</th>
+                                                    <th className="p-5 text-center">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {clients.filter(c => c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold">
+                                                        <td className="p-5">{c.company}</td>
+                                                        <td className="p-5">{c.email}</td>
+                                                        <td className="p-5 flex justify-center gap-2">
+                                                            <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </Card>
                                 </div>
                             )}
 
-                            {/* ABA: PROJETOS */}
+                            {/* PROJETOS */}
                             {activeTab === 'projects' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-800">Meus Projetos</h2>
-                                            <p className="text-sm text-slate-500 mt-1">Gestão de desenvolvimento e entregas</p>
-                                        </div>
-                                    </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()) || (clients.find(c => c.id === p.client_id)?.company || '').toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                                             <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500">
                                                 <div className="p-6">
                                                     <div className="flex justify-between items-start mb-4">
@@ -1123,40 +971,10 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                                     </div>
                                                     <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
                                                     <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                    
-                                                    <div className="space-y-3 pt-4 border-t border-slate-100">
-                                                        <div className="flex justify-between text-xs">
-                                                            <span className="text-slate-400 font-bold">Stack</span>
-                                                            <span className="font-bold text-slate-700">{p.tech_stack}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs">
-                                                            <span className="text-slate-400 font-bold">Valor</span>
-                                                            <span className="font-bold text-emerald-600">{formatCurrency(p.value)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs">
-                                                            <span className="text-slate-400 font-bold">Prazo</span>
-                                                            <span className="font-bold text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs">
-                                                            <span className="text-slate-400 font-bold">Expiração</span>
-                                                            <span className={`font-bold ${p.expiration_date ? 'text-slate-700' : 'text-slate-300 italic'}`}>
-                                                                {p.expiration_date ? new Date(p.expiration_date).toLocaleDateString() : '-'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs">
-                                                            <span className="text-slate-400 font-bold">Pagamento</span>
-                                                            <span className="font-bold text-slate-700">{p.payment_method || 'Não definido'}</span>
-                                                        </div>
-                                                        
-                                                        <div className="pt-2">
-                                                            <div className="flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                                                                <span>Tarefas</span>
-                                                                <span>{(p.tasks || []).filter(t => t.done).length} / {(p.tasks || []).length}</span>
-                                                            </div>
-                                                            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-                                                                <div className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${(p.tasks || []).length > 0 ? ((p.tasks || []).filter(t => t.done).length / (p.tasks || []).length) * 100 : 0}%` }}></div>
-                                                            </div>
-                                                        </div>
+                                                    <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
+                                                        <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
+                                                        <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
+                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span></div>
                                                     </div>
                                                 </div>
                                             </Card>
@@ -1165,103 +983,72 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                 </div>
                             )}
 
-                            {/* ABA: CLIENTES */}
-                            {activeTab === 'clients' && (
+                            {/* ENTREGAS & MANUAIS */}
+                            {activeTab === 'deploy' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
-                                            <p className="text-sm text-slate-500">Empresas e parceiros</p>
-                                        </div>
-                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700"><Icon name="plus" weight="bold"/> Adicionar</button>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                            <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500">
+                                                <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
+                                                    <button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button>
+                                                </div>
+                                            </Card>
+                                        ))}
                                     </div>
-                                    <Card className="overflow-hidden">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase tracking-wider border-b border-slate-100">
-                                                    <tr>
-                                                        <th className="p-5">Empresa / Cliente</th>
-                                                        <th className="p-5">CNPJ / CPF</th>
-                                                        <th className="p-5">Contato</th>
-                                                        <th className="p-5">Segmento</th>
-                                                        <th className="p-5 text-center">Status</th>
-                                                        <th className="p-5 text-center">Ações</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-50">
-                                                    {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                                                        <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="p-5">
-                                                                <p className="font-bold text-slate-800">{c.company}</p>
-                                                                <p className="text-xs text-slate-400">{c.name}</p>
-                                                            </td>
-                                                            <td className="p-5 text-slate-500 font-mono text-xs">{c.cnpj_cpf || '-'}</td>
-                                                            <td className="p-5 text-slate-600">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <span className="flex items-center gap-2"><Icon name="envelope" size={14}/> {c.email}</span>
-                                                                    <span className="flex items-center gap-2">
-                                                                        <Icon name="phone" size={14}/> {c.phone} 
-                                                                        <button onClick={() => openWhatsapp(c.phone)} className="ml-2 text-emerald-500 hover:text-emerald-600" title="Abrir WhatsApp">
-                                                                            <Icon name="whatsapp-logo" size={18} weight="fill"/>
-                                                                        </button>
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-5"><span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold text-slate-600">{c.segment}</span></td>
-                                                            <td className="p-5 text-center">
-                                                                <span className={`inline-block w-2 h-2 rounded-full ${c.status === 'Ativo' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-                                                            </td>
-                                                            <td className="p-5 flex justify-center gap-2">
-                                                                <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
-                                                                <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </Card>
                                 </div>
                             )}
 
-                            {/* ABA: FINANCEIRO */}
+                            {/* CONTRATOS JURÍDICOS */}
+                            {activeTab === 'contracts' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                        <div><h2 className="text-2xl font-black text-slate-800">Contratos Jurídicos</h2></div>
+                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 transition-all"><Icon name="plus" weight="bold"/> Novo Contrato</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {contracts.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                            <Card key={c.id} className="p-6 border-l-4 border-l-indigo-600">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</div>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                        <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                    </div>
+                                                </div>
+                                                <h3 className="text-lg font-black text-slate-800">{c.title}</h3>
+                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {new Date(c.start_date).toLocaleDateString()}</p>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* FINANCEIRO */}
                             {activeTab === 'finance' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-800">Fluxo de Caixa</h2>
-                                            <p className="text-sm text-slate-500">Receitas e Despesas do Estúdio</p>
-                                        </div>
-                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
+                                        <div><h2 className="text-xl font-bold text-slate-800">Fluxo de Caixa</h2></div>
+                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-4">
-                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Receitas Recentes</h3>
-                                            {financial.filter(f => f.type === 'Receita' && (f.description.toLowerCase().includes(searchTerm.toLowerCase()) || f.category.toLowerCase().includes(searchTerm.toLowerCase()))).map(f => (
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>
+                                            {financial.filter(f => f.type === 'Receita').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
-                                                    <div>
-                                                        <p className="font-bold text-slate-800">{f.description}</p>
-                                                        <p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()} • {f.category}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="font-bold text-emerald-600">+ {formatCurrency(f.value)}</span>
-                                                        <button onClick={() => printReceipt(f)} className="text-slate-300 hover:text-slate-500" title="Imprimir Recibo"><Icon name="printer" weight="bold"/></button>
-                                                    </div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
                                         </div>
                                         <div className="space-y-4">
-                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Despesas Recentes</h3>
-                                            {financial.filter(f => f.type === 'Despesa' && (f.description.toLowerCase().includes(searchTerm.toLowerCase()) || f.category.toLowerCase().includes(searchTerm.toLowerCase()))).map(f => (
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>
+                                            {financial.filter(f => f.type === 'Despesa').map(f => (
                                                 <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
-                                                    <div>
-                                                        <p className="font-bold text-slate-800">{f.description}</p>
-                                                        <p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()} • {f.category}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="font-bold text-rose-600">- {formatCurrency(f.value)}</span>
-                                                        <button onClick={() => printReceipt(f)} className="text-slate-300 hover:text-slate-500" title="Imprimir Comprovante"><Icon name="printer" weight="bold"/></button>
-                                                    </div>
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <span className="font-bold text-rose-600">{formatCurrency(f.value)}</span>
                                                 </Card>
                                             ))}
                                         </div>
@@ -1269,136 +1056,46 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                 </div>
                             )}
 
-                            {/* ABA: RELATÓRIOS (RESTAURADA) */}
+                            {/* RELATÓRIOS */}
                             {activeTab === 'reports' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-indigo-500" onClick={() => {
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório de Projetos</title>
-                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
-                                                </head><body>
-                                                <h1>Relatório de Projetos - SoftGestão</h1>
-                                                <table>
-                                                    <thead><tr><th>Projeto</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead>
-                                                    <tbody>
-                                                        ${projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c=>c.id===p.client_id)?.company || '-'}</td><td>${formatCurrency(p.value)}</td><td>${p.status}</td></tr>`).join('')}
-                                                    </tbody>
-                                                </table>
-                                                </body></html>
-                                            `;
+                                            const content = `<html><body><h1>Relatório de Projetos</h1>...</body></html>`;
                                             const blob = new Blob([content], {type: 'application/msword'});
                                             const url = URL.createObjectURL(blob);
                                             const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
                                         }}>
                                             <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
                                             <h3 className="font-bold text-lg text-slate-800">Exportar Projetos (Word)</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Lista completa de projetos e status em DOC.</p>
                                         </Card>
                                         <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-emerald-500" onClick={() => {
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório Financeiro</title>
-                                                <style>body{font-family:Arial,sans-serif}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background-color:#f2f2f2}</style>
-                                                </head><body>
-                                                <h1>Relatório Financeiro - SoftGestão</h1>
-                                                <table>
-                                                    <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead>
-                                                    <tbody>
-                                                        ${financial.map(f => `<tr><td>${new Date(f.date).toLocaleDateString()}</td><td>${f.description}</td><td>${f.type}</td><td>${formatCurrency(f.value)}</td></tr>`).join('')}
-                                                    </tbody>
-                                                </table>
-                                                </body></html>
-                                            `;
+                                            const content = `<html><body><h1>Relatório Financeiro</h1>...</body></html>`;
                                             const blob = new Blob([content], {type: 'application/msword'});
                                             const url = URL.createObjectURL(blob);
                                             const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
                                         }}>
                                             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
                                             <h3 className="font-bold text-lg text-slate-800">Exportar Financeiro (Word)</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Balanço detalhado de entradas e saídas em DOC.</p>
-                                        </Card>
-                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-purple-500" onClick={() => {
-                                            const today = new Date();
-                                            const currentMonth = today.getMonth();
-                                            const currentYear = today.getFullYear();
-                                            const monthlyIncome = financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
-                                            const monthlyExpense = financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === currentMonth && new Date(f.date).getFullYear() === currentYear).reduce((a,b)=>a+(b.value||0), 0);
-                                            const completedProjects = projects.filter(p => p.status === 'Entregue' && new Date(p.deadline).getMonth() === currentMonth && new Date(p.deadline).getFullYear() === currentYear);
-                                            const content = `
-                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                                                <head><meta charset='utf-8'><title>Relatório de Desempenho Mensal</title>
-                                                <style>body{font-family:Arial,sans-serif} .box{border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#f9f9f9}</style>
-                                                </head><body>
-                                                <h1>Relatório de Desempenho - ${today.toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</h1>
-                                                <div class="box">
-                                                    <h3>Resumo Financeiro</h3>
-                                                    <p><strong>Faturamento:</strong> ${formatCurrency(monthlyIncome)}</p>
-                                                    <p><strong>Despesas:</strong> ${formatCurrency(monthlyExpense)}</p>
-                                                    <p><strong>Lucro Líquido:</strong> ${formatCurrency(monthlyIncome - monthlyExpense)}</p>
-                                                </div>
-                                                <h3>Projetos Entregues no Mês</h3>
-                                                <ul>
-                                                    ${completedProjects.length > 0 ? completedProjects.map(p => `<li>${p.title} - ${clients.find(c=>c.id===p.client_id)?.company}</li>`).join('') : '<li>Nenhum projeto entregue este mês.</li>'}
-                                                </ul>
-                                                </body></html>
-                                            `;
-                                            const blob = new Blob([content], {type: 'application/msword'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a'); a.href=url; a.download=`desempenho_mensal_${currentMonth+1}_${currentYear}.doc`; a.click();
-                                        }}>
-                                            <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="chart-pie-slice" size={32} weight="duotone" /></div>
-                                            <h3 className="font-bold text-lg text-slate-800">Desempenho do Mês</h3>
-                                            <p className="text-sm text-slate-500 mt-2">Resumo de lucro e entregas do mês atual.</p>
                                         </Card>
                                     </div>
                                 </div>
                             )}
 
-                            {/* ABA: CONFIGURAÇÕES */}
+                            {/* CONFIGURAÇÕES */}
                             {activeTab === 'config' && (
                                 <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
-                                    <div className="grid grid-cols-1 gap-8 mb-8">
-                                        <Card className="p-8 shadow-lg border-t-8 border-t-emerald-500 bg-emerald-50/50">
-                                            <h3 className="font-bold text-xl text-slate-800 mb-2 flex items-center gap-3"><Icon name="database" className="text-emerald-600" weight="fill"/> Backup e Restauração de Dados</h3>
-                                            <p className="text-sm text-slate-500 mb-6 max-w-2xl">Mantenha seus dados seguros. Faça o download regular do backup.</p>
-                                            <div className="flex flex-wrap gap-4">
-                                                <button onClick={handleBackup} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-emerald-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
-                                                    <Icon name="download-simple" weight="bold" size={18}/> Baixar Backup
-                                                </button>
-                                                <div className="relative">
-                                                    <input type="file" id="restoreFile" className="hidden" accept=".json" onChange={handleRestore} />
-                                                    <label htmlFor="restoreFile" className="cursor-pointer bg-white hover:bg-slate-100 text-slate-600 font-black py-4 px-8 rounded-2xl transition-all shadow-sm border border-slate-200 uppercase tracking-widest text-xs flex justify-center items-center gap-2">
-                                                        <Icon name="upload-simple" weight="bold" size={18}/> Restaurar Backup
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
-                                            <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
-                                            <form onSubmit={handleSaveConfig} className="space-y-5">
-                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
-                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
-                                                <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
-                                                <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
-                                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
-                                            </form>
-                                        </Card>
-                                        <Card className="p-8 shadow-lg border-t-8 border-t-rose-600">
-                                            <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="lock-key" className="text-rose-600" weight="fill"/> Segurança</h3>
-                                            <form onSubmit={handleChangePassword} className="space-y-5">
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Senha Atual" value={configPasswordForm.current} onChange={e => setConfigPasswordForm({...configPasswordForm, current: e.target.value})} />
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Nova Senha" value={configPasswordForm.newPass} onChange={e => setConfigPasswordForm({...configPasswordForm, newPass: e.target.value})} />
-                                                <input type="password" required className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" placeholder="Confirmar" value={configPasswordForm.confirm} onChange={e => setConfigPasswordForm({...configPasswordForm, confirm: e.target.value})} />
-                                                <button type="submit" className="w-full bg-rose-600 text-white font-black py-4 rounded-2xl text-xs">Alterar Senha</button>
-                                            </form>
-                                        </Card>
-                                    </div>
+                                    <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
+                                        <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
+                                        <form onSubmit={handleSaveConfig} className="space-y-5">
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
+                                            <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
+                                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
+                                        </form>
+                                    </Card>
                                 </div>
                             )}
 
@@ -1415,10 +1112,10 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                         {modalType === 'client' && <><Icon name="briefcase" className="text-indigo-600"/> Ficha do Cliente</>}
                                         {modalType === 'finance' && <><Icon name="currency-dollar" className="text-indigo-600"/> Lançamento</>}
                                         {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Hospedagem</>}
-                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual</>}
-                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato</>}
+                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual do Usuário</>}
+                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato Jurídico</>}
                                     </h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors"><Icon name="x" weight="bold" size={20}/></button>
                                 </div>
 
                                 <form onSubmit={saveItem} className="flex flex-col flex-1 min-h-0">
@@ -1448,7 +1145,7 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
                                                 
                                                 <div className="pt-4 border-t border-slate-100">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist</label>
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
                                                     <div className="flex gap-2 mb-4">
                                                         <input type="text" className="flex-1 p-3 border border-slate-200 rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
                                                         <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus" weight="bold"/></button>
@@ -1460,7 +1157,7 @@ CLÁUSULA PRIMEIRA - DO OBJETO
                                                                     {task.done && <Icon name="check" size={12} weight="bold"/>}
                                                                 </button>
                                                                 <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span>
-                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0"><Icon name="trash" weight="bold"/></button>
+                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0 transition-all"><Icon name="trash" weight="bold"/></button>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1470,7 +1167,7 @@ CLÁUSULA PRIMEIRA - DO OBJETO
 
                                         {modalType === 'client' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
                                                 <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
@@ -1492,18 +1189,70 @@ CLÁUSULA PRIMEIRA - DO OBJETO
 
                                         {modalType === 'hosting' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL</label><input className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL / Domínio</label><input className="w-full p-3 border border-slate-200 rounded-xl font-mono text-indigo-600" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Entrega</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Entrega</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
                                                 </div>
+                                            </>
+                                        )}
+
+                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE MANUAL */}
+                                        {modalType === 'manual' && (
+                                            <>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Conteúdo do Manual</label>
+                                                    <button type="button" onClick={generateManualTemplate} className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Template com IA</button>
+                                                </div>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-sm text-slate-700 outline-none focus:border-indigo-500 h-96 resize-none leading-relaxed" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})} placeholder="Escreva as instruções de uso aqui..."></textarea>
+                                            </>
+                                        )}
+
+                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE CONTRATO */}
+                                        {modalType === 'contract' && (
+                                            <>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}>
+                                                            <option value="">Selecione o Cliente...</option>
+                                                            {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Projeto Relacionado</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}>
+                                                            <option value="">Selecione o Projeto...</option>
+                                                            {projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Início</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Fim</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor (R$)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
+                                                </div>
+                                                <div className="flex justify-between items-center mb-2 mt-4">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Minuta Jurídica</label>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-indigo-700 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Minuta Jurídica</button>
+                                                        {editingItem && (
+                                                            <button type="button" onClick={() => {
+                                                                const blob = new Blob([`<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${contractForm.content}</pre></body></html>`], {type: 'application/msword'});
+                                                                const url = URL.createObjectURL(blob);
+                                                                const a = document.createElement('a'); a.href=url; a.download=`Contrato_${editingItem.title}.doc`; a.click();
+                                                            }} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-emerald-700 transition-all"><Icon name="download-simple" weight="bold"/> Baixar DOC</button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Clique em 'Gerar Minuta' ou escreva o texto do contrato aqui..."></textarea>
                                             </>
                                         )}
                                     </div>
 
-                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button>
+                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all">Cancelar</button>
+                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar Dados</button>
                                     </div>
                                 </form>
                             </div>
