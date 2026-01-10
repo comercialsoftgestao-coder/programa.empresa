@@ -115,15 +115,6 @@
 
         const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
-        // Formata string YYYY-MM-DD para DD/MM/YYYY sem erro de fuso horário
-        const formatDisplayDate = (dateStr) => {
-            if (!dateStr) return '-';
-            const parts = dateStr.split('-');
-            if (parts.length !== 3) return dateStr;
-            const [year, month, day] = parts;
-            return `${day}/${month}/${year}`;
-        };
-
         // --- TELA DE LOGIN ---
         const LoginScreen = ({ onLogin }) => {
             const [user, setUser] = useState('');
@@ -201,25 +192,32 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]); 
+            const [contracts, setContracts] = useState([]); // Orçamentos/Contratos
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState(''); 
+            const [searchTerm, setSearchTerm] = useState(''); // ESTADO DE PESQUISA
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
             const [editingItem, setEditingItem] = useState(null);
             
+            // Refs para Gráfico
             const chartRef = useRef(null);
             const chartInstance = useRef(null);
+            const textAreaRef = useRef(null);
 
+            // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
+            // NOVO STATE: Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
-                setDailyChecks(prev => ({ ...prev, [id]: !prev[id] }));
+                setDailyChecks(prev => ({
+                    ...prev,
+                    [id]: !prev[id]
+                }));
             };
 
             // FORMS
@@ -238,41 +236,71 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
+            // TAREFAS DO PROJETO (NOVO)
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
             const showToast = (msg, type = 'info') => { setToast({ show: true, message: msg, type }); setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 3000); };
 
+            // Resetar pesquisa ao trocar de aba
             useEffect(() => {
                 setSearchTerm('');
             }, [activeTab]);
 
-            // MONITORAMENTO AUTOMÁTICO
+            // FUNÇÃO DE VERIFICAÇÃO DE SITE (PING)
             const checkProjectHealth = async (url) => {
                 if (!url) return 'offline';
+                // Adiciona https se não tiver
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+                
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout para ser generoso
+
+                    // mode: 'no-cors' permite "disparar" a requisição para outros domínios sem erro de CORS
+                    // O retorno é "opaque", não lemos o status code (200, 404), mas se der erro de rede (site down), cai no catch.
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
+                    
                     clearTimeout(timeoutId);
                     return 'online';
                 } catch (error) {
+                    console.warn(`Erro ao verificar ${formattedUrl}:`, error);
                     return 'offline';
                 }
             };
 
+            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA AO ENTRAR NA ABA MONITORAMENTO
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
+                        
+                        // Marca todos como "verificando" se ainda não tiverem status
+                        const initialStatuses = {};
+                        let needsUpdate = false;
+                        projectsToMonitor.forEach(p => {
+                            if (!projectStatus[p.id]) {
+                                initialStatuses[p.id] = 'checking';
+                                needsUpdate = true;
+                            }
+                        });
+
+                        if (needsUpdate) {
+                            setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
+                        }
+
+                        // Roda verificação em paralelo
                         projectsToMonitor.forEach(async (p) => {
-                            if (!projectStatus[p.id] || projectStatus[p.id] === 'checking') {
-                                setProjectStatus(prev => ({ ...prev, [p.id]: 'checking' }));
+                            // Se já estiver checado recentemente, pula (opcional, aqui forçamos checar se estiver 'checking' ou sem status)
+                            if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
-                                if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
+                                
+                                // Auto-marca o checklist diário se estiver online
+                                if (status === 'online') {
+                                    setDailyChecks(prev => ({...prev, [p.id]: true}));
+                                }
                             }
                         });
                     };
@@ -280,29 +308,46 @@
                 }
             }, [activeTab, projects]);
 
+            // Botão para forçar re-verificação
             const forceRecheckAll = () => {
-                setProjectStatus({});
+                setProjectStatus({}); // Limpa status
+                const projectsToMonitor = projects.filter(p => p.hosting_url);
+                
+                // Seta tudo para checking visualmente
+                const checkingState = {};
+                projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
+                setProjectStatus(checkingState);
+
+                // Dispara
+                projectsToMonitor.forEach(async (p) => {
+                    const status = await checkProjectHealth(p.hosting_url);
+                    setProjectStatus(prev => ({ ...prev, [p.id]: status }));
+                    if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
+                });
                 showToast('Iniciando verificação completa...', 'info');
             };
 
-            // FIREBASE DATA
+
+            // CARREGAMENTO INICIAL DO FIREBASE
             useEffect(() => {
                 if (appState === 'authenticated') {
                     const fetchAllData = async () => {
                         setLoading(true);
                         try {
-                            const [projectsS, clientsS, financeS, contractsS] = await Promise.all([
-                                getDocs(collection(db, "projects")),
-                                getDocs(collection(db, "clients")),
-                                getDocs(collection(db, "financial")),
-                                getDocs(collection(db, "contracts"))
-                            ]);
-                            setProjects(projectsS.docs.map(d => ({id: d.id, ...d.data()})));
-                            setClients(clientsS.docs.map(d => ({id: d.id, ...d.data()})));
-                            setFinancial(financeS.docs.map(d => ({id: d.id, ...d.data()})));
-                            setContracts(contractsS.docs.map(d => ({id: d.id, ...d.data()})));
+                            const projectsSnap = await getDocs(collection(db, "projects"));
+                            setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
+                            const clientsSnap = await getDocs(collection(db, "clients"));
+                            setClients(clientsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
+                            const financeSnap = await getDocs(collection(db, "financial"));
+                            setFinancial(financeSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
+                            const contractsSnap = await getDocs(collection(db, "contracts"));
+                            setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
                         } catch (err) {
-                            showToast("Erro ao carregar dados.", "error");
+                            console.error("Erro ao carregar dados do Firebase:", err);
+                            showToast("Erro ao conectar com o banco de dados.", "error");
                         } finally {
                             setLoading(false);
                         }
@@ -311,6 +356,7 @@
                 }
             }, [appState]);
 
+            // PERSISTÊNCIA LOCAL APENAS PARA CONFIG (OPCIONAL)
             useEffect(() => {
                 if (!loading && appState === 'authenticated') {
                     localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
@@ -318,19 +364,32 @@
                 }
             }, [userData, credentials, loading, appState]);
 
-            // DASHBOARD CHART
+            // GRÁFICO DASHBOARD
             useEffect(() => {
                 if (activeTab === 'dashboard' && chartRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
+
                     const ctx = chartRef.current.getContext('2d');
                     const last6Months = Array.from({length: 6}, (_, i) => {
                         const d = new Date();
                         d.setMonth(d.getMonth() - i);
                         return d;
                     }).reverse();
+
                     const labels = last6Months.map(d => d.toLocaleString('pt-BR', { month: 'short' }));
-                    const incomeData = last6Months.map(date => financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth()).reduce((a, b) => a + (b.value || 0), 0));
-                    const expenseData = last6Months.map(date => financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth()).reduce((a, b) => a + (b.value || 0), 0));
+                    
+                    const incomeData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
+                    const expenseData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
                     chartInstance.current = new Chart(ctx, {
                         type: 'bar',
                         data: {
@@ -340,7 +399,12 @@
                                 { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }
                             ]
                         },
-                        options: { responsive: true, maintainAspectRatio: false }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
+                            scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' }, ticks: { font: { size: 10 } } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+                        }
                     });
                 }
                 return () => { if (chartInstance.current) chartInstance.current.destroy(); };
@@ -348,31 +412,82 @@
 
             const handleLogin = (u, p) => {
                 if (u === credentials.user && p === credentials.pass) setAppState('authenticated');
-                else showToast('Acesso negado.', 'error');
+                else showToast('Acesso negado. Tente novamente.', 'error');
             };
 
+            const handleSaveConfig = (e) => {
+                e.preventDefault();
+                showToast('Dados corporativos atualizados!', 'success');
+            };
+
+            // --- BACKUP & RESTORE ---
             const handleBackup = () => {
-                const data = { projects, clients, financial, contracts, userData, credentials };
+                const data = {
+                    projects, clients, financial, contracts, userData, credentials,
+                    generatedAt: new Date().toISOString()
+                };
                 const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = `Backup_SoftGestao_${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
+                showToast('Backup gerado com sucesso!', 'success');
             };
 
             const handleRestore = (e) => {
-                showToast('Importação em massa requer configuração de rede.', 'info');
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        showToast('Restaurar backup requer implementação de importação em massa para o Firebase.', 'info');
+                    } catch (err) {
+                        showToast('Erro ao ler arquivo de backup.', 'error');
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleChangePassword = (e) => {
+                e.preventDefault();
+                if (configPasswordForm.current !== credentials.pass) {
+                    showToast('Senha atual inválida.', 'error');
+                    return;
+                }
+                if (configPasswordForm.newPass !== configPasswordForm.confirm) {
+                    showToast('As novas senhas não coincidem.', 'error');
+                    return;
+                }
+                if (configPasswordForm.newPass.length < 4) {
+                    showToast('Nova senha muito curta.', 'error');
+                    return;
+                }
+                setCredentials({ ...credentials, pass: configPasswordForm.newPass });
+                setConfigPasswordForm({ current: '', newPass: '', confirm: '' });
+                showToast('Senha de acesso atualizada com sucesso!', 'success');
             };
 
             const deleteItem = async (id, list, setList) => {
-                if(confirm('Tem certeza que deseja excluir?')) {
+                if(confirm('Tem certeza que deseja excluir este registro?')) {
                     try {
-                        let col = list === projects ? 'projects' : (list === clients ? 'clients' : (list === financial ? 'financial' : 'contracts'));
-                        await deleteDoc(doc(db, col, id));
-                        setList(list.filter(i => i.id !== id));
-                        showToast('Registro excluído.', 'success');
-                    } catch (e) { showToast('Erro ao excluir.', 'error'); }
+                        let collectionName = '';
+                        if (list === projects) collectionName = 'projects';
+                        else if (list === clients) collectionName = 'clients';
+                        else if (list === financial) collectionName = 'financial';
+                        else if (list === contracts) collectionName = 'contracts';
+
+                        if (collectionName) {
+                            await deleteDoc(doc(db, collectionName, id));
+                            setList(list.filter(i => i.id !== id));
+                            showToast('Registro excluído com sucesso.', 'success');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showToast('Erro ao excluir registro.', 'error');
+                    }
                 }
             };
 
@@ -380,8 +495,14 @@
                 setModalType(type);
                 setEditingItem(item);
                 const today = new Date().toISOString().split('T')[0];
+
                 if (type === 'project') {
-                    setProjectForm(item || { title: '', client_id: '', type: 'Website', deadline: '', status: 'Briefing', value: '', tech_stack: 'React/Node', manual_content: '' });
+                    setProjectForm(item || { 
+                        title: '', client_id: '', type: 'Website', deadline: '', 
+                        description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', 
+                        priority: 'Média', hosting_url: '', deploy_date: '', expiration_date: '', manual_content: '',
+                        payment_method: 'Pix'
+                    });
                     setCurrentProjectTasks(item?.tasks || []);
                 }
                 else if (type === 'client') setClientForm(item || { name: '', company: '', email: '', phone: '', segment: 'Varejo', status: 'Ativo', cnpj_cpf: '' });
@@ -389,11 +510,8 @@
                 else if (type === 'hosting') setHostingForm({ hosting_url: item.hosting_url || '', deploy_date: item.deploy_date || '', expiration_date: item.expiration_date || '' });
                 else if (type === 'manual') setManualForm({ content: item.manual_content || '' });
                 else if (type === 'contract') setContractForm(item || { client_id: '', project_id: '', title: '', start_date: today, end_date: '', value: '', content: '', status: 'Rascunho' });
-                setIsModalOpen(true);
-            };
 
-            const toggleProjectTask = (taskId) => {
-                setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t));
+                setIsModalOpen(true);
             };
 
             const addProjectTask = () => {
@@ -402,69 +520,83 @@
                 setNewTaskText('');
             };
 
+            const toggleProjectTask = (taskId) => {
+                setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t));
+            };
+
             const removeProjectTask = (taskId) => {
                 setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId));
             };
 
-            // GERAÇÃO DE MANUAL
+            const printReceipt = (item) => {
+                const w = window.open('', '_blank');
+                w.document.write(`
+                    <html><head><title>Recibo</title><style>body{font-family:sans-serif;padding:40px;text-align:center}.box{border:2px solid #000;padding:20px;max-width:600px;margin:0 auto}h1{margin:0 0 20px 0}p{margin:10px 0;text-align:left}.val{font-weight:bold;font-size:1.2em}</style></head>
+                    <body>
+                        <div class="box">
+                            <h1>RECIBO</h1>
+                            <p>Recebemos a importância de <span class="val">${formatCurrency(item.value)}</span></p>
+                            <p>Referente a: <strong>${item.description}</strong></p>
+                            <p>Categoria: ${item.category}</p>
+                            <p>Data: ${new Date(item.date).toLocaleDateString()}</p>
+                            <br><br>
+                            <p style="text-align:center">_____________________________</p>
+                            <p style="text-align:center">${userData.name}</p>
+                            <p style="text-align:center;font-size:0.8em">${userData.cnpj}</p>
+                        </div>
+                        <script>window.print();<\/script>
+                    </body></html>
+                `);
+                w.document.close();
+            };
+
             const generateManualTemplate = () => {
                 if (!editingItem) return;
                 const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}
 
 1. INTRODUÇÃO
-O sistema ${editingItem.title} foi projetado para otimizar os processos de...
+Este sistema foi desenvolvido para facilitar a gestão de sua empresa...
 
-2. COMO ACESSAR
-Utilize o navegador Chrome ou Safari através da URL: ${editingItem.hosting_url || 'https://suporte.dominioatendimento.com/central/faces/solucao.html?codigo=7087'}
+2. ACESSO
+Para acessar, utilize sua URL e credenciais fornecidas...
 
-3. REQUISITOS TÉCNICOS
-- Conexão estável com a internet.
-- Navegador atualizado.
+3. FUNCIONALIDADES
+- Cadastro de Itens
+- Relatórios
+- Monitoramento em tempo real
 
 4. SUPORTE
-Dúvidas? Entre em contato pelo e-mail: ${userData.email}`;
+Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 setManualForm({ content: template });
-                showToast('Manual gerado!', 'success');
+                showToast('Template de manual gerado!', 'success');
             };
             
-            // GERAÇÃO DE CONTRATO (CORREÇÃO DE GERAÇÃO)
             const generateLegalContract = () => {
                 const client = clients.find(c => c.id == contractForm.client_id);
                 const project = projects.find(p => p.id == contractForm.project_id);
                 
-                if (!client || !project) { 
-                    showToast('Selecione Cliente e Projeto primeiro.', 'error'); 
-                    return; 
-                }
+                if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
                 
                 const value = parseFloat(contractForm.value || project.value || 0);
                 const fineValue = formatCurrency(value * 20);
-                const startDateStr = contractForm.start_date ? formatDisplayDate(contractForm.start_date) : '___/___/___';
-                const endDateStr = contractForm.end_date ? formatDisplayDate(contractForm.end_date) : 'indeterminado';
+                
+                const startDateStr = contractForm.start_date ? new Date(contractForm.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '___/___/___';
+                const endDateStr = contractForm.end_date ? new Date(contractForm.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'indeterminado';
 
                 const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
+================================================================================
 
 CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
-
-CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.
+CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}.
 
 CLÁUSULA PRIMEIRA - DO OBJETO
-1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software/sistema denominado "${project.title}" ("SOFTWARE").
+1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software denominado "${project.title}".
 
-CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
-2.1. Todo o código-fonte, estruturas de banco de dados e design são de propriedade exclusiva da CONTRATADA.
-2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso exclusiva e intransferível.
-2.3. É ESTRITAMENTE VEDADO à CONTRATANTE vender, alugar ou ceder o SOFTWARE a terceiros.
+CLÁUSULA SEGUNDA - VEDAÇÃO À REVENDA
+2.1. Todo o código-fonte é de propriedade intelectual da CONTRATADA.
+2.2. A revenda ou cópia não autorizada sujeita o infrator a multa de ${fineValue}.
 
-CLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS
-3.1. O descumprimento de qualquer cláusula sujeitará a parte infratora ao pagamento de multa de 50% do valor do contrato.
-3.2. CASO SEJA COMPROVADA A REVENDA OU CÓPIA NÃO AUTORIZADA, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO).
-
-CLÁUSULA QUARTA - DO VALOR E VIGÊNCIA
-4.1. O valor total deste contrato é de ${formatCurrency(value)}.
-4.2. O contrato entra em vigor em ${startDateStr} e terá validade até ${endDateStr}.
-
-Data de Geração: ${new Date().toLocaleDateString()}
+... (resto do contrato)
 `;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
@@ -472,6 +604,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
             const saveItem = async (e) => {
                 e.preventDefault();
+                
                 try {
                     if (modalType === 'project') {
                         const newItem = { ...projectForm, value: parseFloat(projectForm.value), client_id: String(projectForm.client_id), tasks: currentProjectTasks };
@@ -483,12 +616,13 @@ Data de Geração: ${new Date().toLocaleDateString()}
                             setProjects([...projects, {id: docRef.id, ...newItem}]);
                         }
                     } else if (modalType === 'client') {
+                        const newItem = { ...clientForm };
                         if (editingItem) {
-                            await updateDoc(doc(db, "clients", editingItem.id), clientForm);
-                            setClients(clients.map(i => i.id === editingItem.id ? {id: editingItem.id, ...clientForm} : i));
+                            await updateDoc(doc(db, "clients", editingItem.id), newItem);
+                            setClients(clients.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
                         } else {
-                            const docRef = await addDoc(collection(db, "clients"), clientForm);
-                            setClients([...clients, {id: docRef.id, ...clientForm}]);
+                            const docRef = await addDoc(collection(db, "clients"), newItem);
+                            setClients([...clients, {id: docRef.id, ...newItem}]);
                         }
                     } else if (modalType === 'finance') {
                         const newItem = { ...financeForm, value: parseFloat(financeForm.value) };
@@ -500,31 +634,46 @@ Data de Geração: ${new Date().toLocaleDateString()}
                             setFinancial([...financial, {id: docRef.id, ...newItem}]);
                         }
                     } else if (modalType === 'hosting') {
-                        await updateDoc(doc(db, "projects", editingItem.id), hostingForm);
-                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...hostingForm } : i));
+                        const newItem = { ...hostingForm };
+                        await updateDoc(doc(db, "projects", editingItem.id), newItem);
+                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...newItem } : i));
                     } else if (modalType === 'manual') {
-                        await updateDoc(doc(db, "projects", editingItem.id), { manual_content: manualForm.content });
-                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, manual_content: manualForm.content } : i));
+                        const newItem = { manual_content: manualForm.content };
+                        await updateDoc(doc(db, "projects", editingItem.id), newItem);
+                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...newItem } : i));
                     } else if (modalType === 'contract') {
+                        const newItem = { ...contractForm };
                         if (editingItem) {
-                            await updateDoc(doc(db, "contracts", editingItem.id), contractForm);
-                            setContracts(contracts.map(i => i.id === editingItem.id ? {id: editingItem.id, ...contractForm} : i));
+                            await updateDoc(doc(db, "contracts", editingItem.id), newItem);
+                            setContracts(contracts.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
                         } else {
-                            const docRef = await addDoc(collection(db, "contracts"), contractForm);
-                            setContracts([...contracts, {id: docRef.id, ...contractForm}]);
+                            const docRef = await addDoc(collection(db, "contracts"), newItem);
+                            setContracts([...contracts, {id: docRef.id, ...newItem}]);
                         }
                     }
+
                     setIsModalOpen(false);
-                    showToast('Dados salvos.', 'success');
-                } catch (err) { showToast("Erro ao salvar.", "error"); }
+                    showToast('Dados salvos com sucesso!', 'success');
+                } catch (err) {
+                    console.error("Erro ao salvar:", err);
+                    showToast("Erro ao salvar no banco de dados.", "error");
+                }
             };
 
             const stats = useMemo(() => {
-                const active = projects.filter(p => !['Entregue', 'Suporte'].includes(p.status)).length;
-                const totalIncome = financial.filter(f => f.type === 'Receita').reduce((a, b) => a + (b.value || 0), 0);
-                const totalExpense = financial.filter(f => f.type === 'Despesa').reduce((a, b) => a + (b.value || 0), 0);
-                return { active, totalIncome, totalExpense, balance: totalIncome - totalExpense };
+                const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
+                const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
+                const activeProjects = projects.filter(p => ['Desenvolvimento', 'Briefing', 'Design'].includes(p.status)).length;
+                const pipelineValue = projects.filter(p => ['Desenvolvimento', 'Briefing'].includes(p.status)).reduce((a,b) => a + (b.value || 0), 0);
+                const supportClients = projects.filter(p => p.status === 'Suporte').length;
+                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
             }, [financial, projects]);
+
+            const openWhatsapp = (phone) => {
+                if (!phone) { showToast('Telefone não cadastrado', 'error'); return; }
+                const formatted = phone.replace(/[^0-9]/g, '');
+                window.open(`https://wa.me/55${formatted}`, '_blank');
+            };
 
             if (appState === 'login') return <LoginScreen onLogin={handleLogin} />;
 
@@ -547,6 +696,7 @@ Data de Geração: ${new Date().toLocaleDateString()}
                     case 'Desenvolvimento': return 'bg-blue-100 text-blue-700 border-blue-200';
                     case 'Homologação': return 'bg-orange-100 text-orange-700 border-orange-200';
                     case 'Entregue': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                    case 'Suporte': return 'bg-slate-100 text-slate-700 border-slate-200';
                     default: return 'bg-gray-100 text-gray-700';
                 }
             };
@@ -554,74 +704,214 @@ Data de Geração: ${new Date().toLocaleDateString()}
             return (
                 <div className="flex h-screen overflow-hidden text-slate-700 font-sans">
                     <Toast {...toast} onClose={() => setToast({...toast, show: false})} />
+                    
+                    {/* SIDEBAR */}
                     <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl border-r border-slate-800`}>
                         <div className="p-8 border-b border-slate-800">
-                            <BrandLogo />
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold"><i className="ph-fill ph-code text-2xl"></i></div>
+                                <div>
+                                    <h1 className="text-lg font-bold text-white tracking-tight">SOFTGESTÃO</h1>
+                                    <p className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold">Admin Panel</p>
+                                </div>
+                            </div>
                         </div>
-                        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 text-sm font-semibold">
+                        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+                            <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Principal</p>
                             {menuItems.map(item => (
                                 <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
                                     <Icon name={item.icon} size={20} weight={activeTab === item.id ? 'fill' : 'regular'} />
                                     {item.label}
                                 </button>
                             ))}
                         </nav>
-                        <div className="p-4 bg-slate-800/50 m-4 rounded-xl flex items-center justify-between">
-                            <span className="text-xs font-bold truncate">{userData.name}</span>
-                            <button onClick={() => setAppState('login')} className="text-slate-400 hover:text-rose-500"><Icon name="sign-out" size={20}/></button>
+                        <div className="p-4 bg-slate-800/50 m-4 rounded-xl border border-slate-700">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-900/50 rounded-full flex items-center justify-center font-bold text-indigo-300 text-sm border border-indigo-500/30">{userData.name.charAt(0)}</div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-white truncate">{userData.name}</p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Online • Nuvem</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setAppState('login')} className="text-slate-400 hover:text-white"><Icon name="sign-out" size={20}/></button>
+                            </div>
                         </div>
                     </aside>
 
+                    {/* MAIN CONTENT */}
                     <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 sticky top-0">
+                        {/* HEADER */}
+                        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 sticky top-0">
                             <div className="flex items-center gap-4 flex-1">
-                                <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-600"><Icon name="list" size={24} /></button>
-                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
-                                <input type="text" className="hidden md:block w-full max-w-md ml-8 pl-10 pr-4 py-2 bg-slate-100 rounded-xl text-sm" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg"><Icon name="list" size={24} /></button>
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
+                                </div>
+                                {['projects', 'clients', 'contracts', 'finance', 'deploy', 'monitoring'].includes(activeTab) && (
+                                    <div className="hidden md:flex flex-1 max-w-md ml-8 relative">
+                                        <span className="absolute left-3 top-2.5 text-slate-400"><Icon name="magnifying-glass" weight="bold"/></span>
+                                        <input 
+                                            type="text" 
+                                            className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-xl text-sm font-semibold focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400" 
+                                            placeholder={`Buscar em ${menuItems.find(i => i.id === activeTab)?.label}...`}
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={() => openModal('project')} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-600 shadow-lg"><Icon name="plus-circle" weight="fill"/> NOVO PROJETO</button>
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => openModal('project')} className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-900/10">
+                                    <Icon name="plus-circle" weight="fill"/> NOVO PROJETO
+                                </button>
+                            </div>
                         </header>
 
                         <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                            
                             {/* DASHBOARD */}
                             {activeTab === 'dashboard' && (
                                 <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-bold">
-                                        <Card className="p-6 bg-indigo-600 text-white border-none"><p className="text-xs opacity-80 uppercase">Ativos</p><h3 className="text-4xl">{stats.active}</h3></Card>
-                                        <Card className="p-6"><p className="text-xs text-slate-400 uppercase">Receita</p><h3 className="text-3xl text-emerald-600">{formatCurrency(stats.totalIncome)}</h3></Card>
-                                        <Card className="p-6"><p className="text-xs text-slate-400 uppercase">Despesa</p><h3 className="text-3xl text-rose-600">{formatCurrency(stats.totalExpense)}</h3></Card>
-                                        <Card className="p-6"><p className="text-xs text-slate-400 uppercase">Saldo</p><h3 className={`text-3xl ${stats.balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3></Card>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        <Card className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none card-hover relative overflow-hidden">
+                                            <Icon name="code" size={120} className="absolute -right-6 -bottom-6 text-white/10" weight="fill"/>
+                                            <p className="text-xs text-indigo-100 uppercase font-bold tracking-wider mb-2 opacity-80">Projetos em Andamento</p>
+                                            <h3 className="text-4xl font-black">{stats.activeProjects}</h3>
+                                            <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded text-white font-bold">Produção Ativa</p>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Pipeline de Vendas</p>
+                                                    <h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.pipelineValue)}</h3>
+                                                </div>
+                                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Icon name="trend-up" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Caixa do Mês</p>
+                                                    <h3 className={`text-3xl font-black ${stats.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3>
+                                                </div>
+                                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="wallet" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Clientes em Suporte</p>
+                                                    <h3 className="text-3xl font-black text-slate-800">{stats.supportClients}</h3>
+                                                </div>
+                                                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><Icon name="headset" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
                                     </div>
-                                    <Card className="p-8"><h3 className="font-bold mb-6">Desempenho Financeiro</h3><div className="h-64"><canvas ref={chartRef}></canvas></div></Card>
+
+                                    {/* GRÁFICO E LISTAS */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        <div className="col-span-2 space-y-8">
+                                            <Card className="p-8 card-hover">
+                                                <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="chart-bar" className="text-indigo-600"/> Performance Financeira (Últimos 6 Meses)</h3>
+                                                <div className="h-64">
+                                                    <canvas ref={chartRef}></canvas>
+                                                </div>
+                                            </Card>
+
+                                            <Card className="p-8 card-hover">
+                                                <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="kanban" className="text-indigo-600"/> Acompanhamento de Projetos</h3>
+                                                <div className="space-y-4">
+                                                    {projects.filter(p => p.status !== 'Entregue').length === 0 ? (
+                                                        <p className="text-slate-400 text-sm italic py-4">Nenhum projeto ativo no momento.</p>
+                                                    ) : projects.filter(p => p.status !== 'Entregue').map(p => (
+                                                        <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-colors group cursor-pointer hover:bg-indigo-50" onClick={() => openModal('project', p)}>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-2 h-12 rounded-full ${getStatusColor(p.status).split(' ')[0].replace('bg-', 'bg-')}`}></div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-slate-800">{p.title}</h4>
+                                                                    <p className="text-xs text-slate-500 font-medium">{clients.find(c => c.id === p.client_id)?.company || 'Cliente não vinculado'} • {p.type}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right flex items-center gap-4">
+                                                                <div className="text-right hidden sm:block">
+                                                                    <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(p.status)}`}>{p.status}</span>
+                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {new Date(p.deadline).toLocaleDateString()}</p>
+                                                                </div>
+                                                                <div className="p-2 text-slate-300 group-hover:text-indigo-600 transition-colors"><Icon name="pencil-simple" weight="bold" /></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Card>
+                                        </div>
+
+                                        <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
+                                            <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas e Avisos</h3>
+                                            <div className="space-y-4">
+                                                {projects.filter(p => new Date(p.deadline) < new Date() && p.status !== 'Entregue').map(p => (
+                                                    <div key={`delay-${p.id}`} onClick={() => openModal('project', p)} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-rose-500/20 transition-colors">
+                                                        <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-rose-400">Prazo Excedido</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {new Date(p.deadline).toLocaleDateString()}.</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
+                                                    <div key={`exp-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
+                                                        <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em breve.</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Card>
+                                    </div>
                                 </div>
                             )}
 
                             {/* MONITORAMENTO */}
                             {activeTab === 'monitoring' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center">
-                                        <h2 className="text-xl font-bold">Status dos Sites</h2>
-                                        <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Icon name="arrows-clockwise" weight="bold"/> Atualizar Tudo</button>
+                                    <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2>
+                                            <p className="text-sm text-slate-500 mt-1">Verificação de disponibilidade dos sites ativos.</p>
+                                        </div>
+                                        <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
+                                            <Icon name="arrows-clockwise" weight="bold"/> Verificar Novamente
+                                        </button>
                                     </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                         {projects.filter(p => p.hosting_url).map(p => {
                                             const isChecked = dailyChecks[p.id];
-                                            const status = projectStatus[p.id] || 'online';
+                                            const status = projectStatus[p.id] || 'checking';
+
                                             return (
-                                                <Card key={p.id} className={`p-5 relative group ${isChecked ? 'bg-emerald-50 border-emerald-200' : 'bg-white'}`}>
-                                                    <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                                                <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
+                                                    <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'checking' ? 'bg-blue-500 animate-pulse' : (status === 'online' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
                                                     <div className="flex justify-between items-start mb-3">
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${status === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{status}</span>
-                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                            <button onClick={() => openModal('project', p)} className="p-1 hover:text-indigo-600"><Icon name="pencil-simple" size={16}/></button>
-                                                            <button onClick={() => openModal('hosting', p)} className="p-1 hover:text-indigo-600"><Icon name="globe" size={16}/></button>
-                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`p-1 ${isChecked ? 'text-emerald-500' : 'text-slate-300'}`}><Icon name="check-circle" size={18} weight="fill"/></button>
+                                                        <div className="flex items-center gap-2">
+                                                            {status === 'checking' && <Icon name="spinner" className="animate-spin text-blue-500" weight="bold" />}
+                                                            {status === 'online' && <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Online</div>}
+                                                            {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Offline</div>}
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="pencil-simple" weight="bold" size={16}/></button>
+                                                            <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="globe" weight="bold" size={16}/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash" weight="bold" size={16}/></button>
+                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button>
                                                         </div>
                                                     </div>
-                                                    <h3 className="font-bold text-sm truncate">{p.title}</h3>
-                                                    <p className="text-xs text-slate-500 mb-4">{p.hosting_url}</p>
-                                                    <a href={p.hosting_url} target="_blank" className="block text-center bg-slate-900 text-white py-2 rounded-lg text-[10px] font-bold">ABRIR SITE</a>
+                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3>
+                                                    <p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">ABRIR SITE</a>
                                                 </Card>
                                             );
                                         })}
@@ -629,24 +919,33 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* MEUS CLIENTES */}
+                            {/* CLIENTES */}
                             {activeTab === 'clients' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <h2 className="text-xl font-bold">Clientes</h2>
-                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Icon name="plus" weight="bold"/> Adicionar</button>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
+                                            <p className="text-sm text-slate-500">Empresas e parceiros cadastrados.</p>
+                                        </div>
+                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button>
                                     </div>
                                     <Card className="overflow-hidden">
-                                        <table className="w-full text-left text-sm font-semibold">
-                                            <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase"><tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr></thead>
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                                <tr>
+                                                    <th className="p-5">Empresa</th>
+                                                    <th className="p-5">Contato</th>
+                                                    <th className="p-5 text-center">Ações</th>
+                                                </tr>
+                                            </thead>
                                             <tbody className="divide-y divide-slate-100">
-                                                {clients.map(c => (
-                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                                {clients.filter(c => c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold">
                                                         <td className="p-5">{c.company}</td>
                                                         <td className="p-5">{c.email}</td>
                                                         <td className="p-5 flex justify-center gap-2">
-                                                            <button onClick={() => openModal('client', c)} className="p-2 text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
-                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 text-rose-500"><Icon name="trash" weight="bold"/></button>
+                                                            <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -656,42 +955,49 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                 </div>
                             )}
 
-                            {/* PROJETOS WEB */}
+                            {/* PROJETOS */}
                             {activeTab === 'projects' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-in">
-                                    {projects.map(p => (
-                                        <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500 flex flex-col group">
-                                            <div className="flex justify-between items-start mb-4">
-                                                <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
-                                                    <button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                            <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500">
+                                                <div className="p-6">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
+                                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                    <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
+                                                        <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
+                                                        <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
+                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{new Date(p.deadline).toLocaleDateString()}</span></div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <h3 className="text-lg font-black">{p.title}</h3>
-                                            <p className="text-xs font-bold text-slate-500 mt-2">{clients.find(c => c.id == p.client_id)?.company || 'S/ Cliente'}</p>
-                                            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase text-slate-400">
-                                                <div>Prazo: <span className="text-slate-700">{formatDisplayDate(p.deadline)}</span></div>
-                                                <div className="text-right">Valor: <span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
-                                            </div>
-                                        </Card>
-                                    ))}
+                                            </Card>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
                             {/* ENTREGAS & MANUAIS */}
                             {activeTab === 'deploy' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-in">
-                                    {projects.filter(p => p.status === 'Entregue' || p.hosting_url).map(p => (
-                                        <Card key={p.id} className="p-6 border-t-4 border-t-emerald-500">
-                                            <h3 className="font-bold truncate">{p.title}</h3>
-                                            <p className="text-xs text-slate-400 mt-1 mb-4">{clients.find(c => c.id == p.client_id)?.company}</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button onClick={() => openModal('hosting', p)} className="py-2 bg-slate-100 rounded-lg text-[10px] font-bold hover:bg-slate-200">HOSPEDAGEM</button>
-                                                <button onClick={() => openModal('manual', p)} className="py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold hover:bg-indigo-100">MANUAL</button>
-                                            </div>
-                                        </Card>
-                                    ))}
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                            <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500">
+                                                <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
+                                                    <button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
@@ -699,21 +1005,21 @@ Data de Geração: ${new Date().toLocaleDateString()}
                             {activeTab === 'contracts' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <h2 className="text-xl font-bold">Contratos Ativos</h2>
-                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 shadow-lg"><Icon name="plus" weight="bold"/> NOVO CONTRATO</button>
+                                        <div><h2 className="text-2xl font-black text-slate-800">Contratos Jurídicos</h2></div>
+                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 transition-all"><Icon name="plus" weight="bold"/> Novo Contrato</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {contracts.map(c => (
+                                        {contracts.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
                                             <Card key={c.id} className="p-6 border-l-4 border-l-indigo-600">
                                                 <div className="flex justify-between items-start mb-4">
-                                                    <span className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</span>
+                                                    <div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</div>
                                                     <div className="flex gap-2">
-                                                        <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
-                                                        <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
+                                                        <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                        <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg"><Icon name="trash" weight="bold"/></button>
                                                     </div>
                                                 </div>
-                                                <h3 className="text-lg font-black">{c.title}</h3>
-                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Data Início: {formatDisplayDate(c.start_date)}</p>
+                                                <h3 className="text-lg font-black text-slate-800">{c.title}</h3>
+                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {new Date(c.start_date).toLocaleDateString()}</p>
                                             </Card>
                                         ))}
                                     </div>
@@ -722,58 +1028,56 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
                             {/* FINANCEIRO */}
                             {activeTab === 'finance' && (
-                                <div className="space-y-6 animate-fade-in">
-                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm">
-                                        <h2 className="text-xl font-bold">Fluxo de Caixa</h2>
-                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold"><Icon name="plus" weight="bold"/> Adicionar</button>
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div><h2 className="text-xl font-bold text-slate-800">Fluxo de Caixa</h2></div>
+                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <Card className="p-6">
-                                            <h3 className="font-bold text-sm text-emerald-600 uppercase mb-4">Receitas</h3>
-                                            <div className="space-y-3">
-                                                {financial.filter(f => f.type === 'Receita').map(f => (
-                                                    <div key={f.id} className="flex justify-between items-center text-sm font-semibold border-b pb-2">
-                                                        <span>{f.description}</span><span className="text-emerald-600">{formatCurrency(f.value)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </Card>
-                                        <Card className="p-6">
-                                            <h3 className="font-bold text-sm text-rose-600 uppercase mb-4">Despesas</h3>
-                                            <div className="space-y-3">
-                                                {financial.filter(f => f.type === 'Despesa').map(f => (
-                                                    <div key={f.id} className="flex justify-between items-center text-sm font-semibold border-b pb-2">
-                                                        <span>{f.description}</span><span className="text-rose-600">{formatCurrency(f.value)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </Card>
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>
+                                            {financial.filter(f => f.type === 'Receita').map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>
+                                            {financial.filter(f => f.type === 'Despesa').map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{new Date(f.date).toLocaleDateString()}</p></div>
+                                                    <span className="font-bold text-rose-600">{formatCurrency(f.value)}</span>
+                                                </Card>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* RELATÓRIOS */}
                             {activeTab === 'reports' && (
-                                <div className="space-y-6 animate-fade-in">
-                                    <h2 className="text-xl font-bold">Relatórios</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <Card className="p-8 cursor-pointer hover:bg-slate-50 transition-all border-b-4 border-b-indigo-500 text-center" onClick={() => {
-                                            const table = projects.map(p => `<tr><td>${p.title}</td><td>${formatCurrency(p.value)}</td><td>${formatDisplayDate(p.deadline)}</td></tr>`).join('');
-                                            const win = window.open('', '_blank');
-                                            win.document.write(`<html><body><h1>Relatório de Projetos</h1><table border="1"><tr><th>Projeto</th><th>Valor</th><th>Prazo</th></tr>${table}</table></body></html>`);
-                                            win.print();
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-indigo-500" onClick={() => {
+                                            const content = `<html><body><h1>Relatório de Projetos</h1>...</body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
                                         }}>
-                                            <Icon name="file-doc" size={48} className="text-indigo-600 mx-auto mb-4" />
-                                            <h3 className="font-bold">Projetos Ativos (Print)</h3>
+                                            <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
+                                            <h3 className="font-bold text-lg text-slate-800">Exportar Projetos (Word)</h3>
                                         </Card>
-                                        <Card className="p-8 cursor-pointer hover:bg-slate-50 transition-all border-b-4 border-b-emerald-500 text-center" onClick={() => {
-                                            const table = financial.map(f => `<tr><td>${f.description}</td><td>${f.type}</td><td>${formatCurrency(f.value)}</td></tr>`).join('');
-                                            const win = window.open('', '_blank');
-                                            win.document.write(`<html><body><h1>Relatório Financeiro</h1><table border="1"><tr><th>Descrição</th><th>Tipo</th><th>Valor</th></tr>${table}</table></body></html>`);
-                                            win.print();
+                                        <Card className="p-8 hover:shadow-lg transition-all cursor-pointer group border-b-4 border-b-emerald-500" onClick={() => {
+                                            const content = `<html><body><h1>Relatório Financeiro</h1>...</body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
                                         }}>
-                                            <Icon name="file-doc" size={48} className="text-emerald-600 mx-auto mb-4" />
-                                            <h3 className="font-bold">Financeiro Completo (Print)</h3>
+                                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform w-fit mb-4"><Icon name="file-doc" size={32} weight="duotone" /></div>
+                                            <h3 className="font-bold text-lg text-slate-800">Exportar Financeiro (Word)</h3>
                                         </Card>
                                     </div>
                                 </div>
@@ -781,41 +1085,44 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
                             {/* CONFIGURAÇÕES */}
                             {activeTab === 'config' && (
-                                <div className="space-y-8 animate-fade-in max-w-4xl mx-auto">
+                                <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
                                     <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
-                                        <h3 className="font-bold text-xl mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
+                                        <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
                                         <form onSubmit={handleSaveConfig} className="space-y-5">
-                                            <div><label className="text-[10px] font-bold text-slate-400 uppercase">Empresa</label><input className="w-full p-4 border rounded-2xl bg-slate-50 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} /></div>
-                                            <div><label className="text-[10px] font-bold text-slate-400 uppercase">CNPJ</label><input className="w-full p-4 border rounded-2xl bg-slate-50 font-bold" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} /></div>
-                                            <div><label className="text-[10px] font-bold text-slate-400 uppercase">E-mail</label><input className="w-full p-4 border rounded-2xl bg-slate-50 font-bold" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} /></div>
-                                            <div className="flex gap-4">
-                                                <button type="submit" className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl">Salvar Cadastro</button>
-                                                <button type="button" onClick={handleBackup} className="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-2xl">Baixar Backup</button>
-                                            </div>
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
+                                            <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
+                                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
                                         </form>
                                     </Card>
                                 </div>
                             )}
+
                         </div>
                     </main>
 
-                    {/* MODAL UNIVERSAL (RESTAURAÇÃO COMPLETA) */}
+                    {/* MODAL UNIVERSAL */}
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
                             <div className={`bg-white rounded-3xl shadow-2xl w-full ${['manual', 'contract'].includes(modalType) ? 'max-w-4xl' : 'max-w-lg'} border border-slate-200 flex flex-col max-h-[90vh]`}>
                                 <div className="bg-slate-50 p-6 flex-none flex justify-between items-center border-b border-slate-100">
                                     <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                        <Icon name={modalType === 'project' ? 'laptop' : (modalType === 'client' ? 'briefcase' : (modalType === 'finance' ? 'currency-dollar' : 'scroll'))} className="text-indigo-600"/> 
-                                        {modalType.toUpperCase()}
+                                        {modalType === 'project' && <><Icon name="laptop" className="text-indigo-600"/> Dados do Projeto</>}
+                                        {modalType === 'client' && <><Icon name="briefcase" className="text-indigo-600"/> Ficha do Cliente</>}
+                                        {modalType === 'finance' && <><Icon name="currency-dollar" className="text-indigo-600"/> Lançamento</>}
+                                        {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Hospedagem</>}
+                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual do Usuário</>}
+                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato Jurídico</>}
                                     </h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors"><Icon name="x" weight="bold" size={20}/></button>
                                 </div>
 
                                 <form onSubmit={saveItem} className="flex flex-col flex-1 min-h-0">
                                     <div className="p-8 space-y-6 overflow-y-auto flex-1">
                                         {modalType === 'project' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
@@ -824,21 +1131,33 @@ Data de Geração: ${new Date().toLocaleDateString()}
                                                             {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
                                                         </select>
                                                     </div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
+                                                            <option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo de Entrega</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
-                                                <div className="pt-4 border-t">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase block mb-3">Checklist</label>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                
+                                                <div className="pt-4 border-t border-slate-100">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
                                                     <div className="flex gap-2 mb-4">
                                                         <input type="text" className="flex-1 p-3 border border-slate-200 rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
                                                         <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus" weight="bold"/></button>
                                                     </div>
-                                                    <div className="space-y-2">
+                                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                                                         {currentProjectTasks.map(task => (
-                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group">
-                                                                <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white'}`}>{task.done && <Icon name="check" size={12}/>}</button>
+                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white border border-transparent hover:border-slate-100">
+                                                                <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300'}`}>
+                                                                    {task.done && <Icon name="check" size={12} weight="bold"/>}
+                                                                </button>
                                                                 <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span>
-                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100"><Icon name="trash" weight="bold"/></button>
+                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0 transition-all"><Icon name="trash" weight="bold"/></button>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -848,79 +1167,92 @@ Data de Geração: ${new Date().toLocaleDateString()}
 
                                         {modalType === 'client' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Empresa</label><input required className="w-full p-3 border rounded-xl font-bold" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">CNPJ</label><input required className="w-full p-3 border rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Email</label><input type="email" className="w-full p-3 border rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Telefone</label><input className="w-full p-3 border rounded-xl" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
+                                                </div>
                                             </>
                                         )}
 
                                         {modalType === 'finance' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Tipo</label><select className="w-full p-3 border rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Data</label><input type="date" required className="w-full p-3 border rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Descrição</label><input required className="w-full p-3 border rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Valor</label><input type="number" required className="w-full p-3 border rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
                                             </>
                                         )}
 
                                         {modalType === 'hosting' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">URL / Domínio</label><input className="w-full p-3 border rounded-xl font-mono text-indigo-600" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL / Domínio</label><input className="w-full p-3 border border-slate-200 rounded-xl font-mono text-indigo-600" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Data Entrega</label><input type="date" className="w-full p-3 border rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Data Expiração</label><input type="date" className="w-full p-3 border rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Entrega</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
                                                 </div>
                                             </>
                                         )}
 
+                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE MANUAL */}
                                         {modalType === 'manual' && (
                                             <>
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase">Manual do Usuário</label>
-                                                    <button type="button" onClick={generateManualTemplate} className="text-[10px] font-bold text-indigo-600 uppercase transition-all"><Icon name="magic-wand" weight="bold"/> Gerar com IA</button>
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Conteúdo do Manual</label>
+                                                    <button type="button" onClick={generateManualTemplate} className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Template com IA</button>
                                                 </div>
-                                                <textarea className="w-full p-4 border rounded-xl font-mono text-sm h-96 resize-none" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})} placeholder="Instruções..."></textarea>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-sm text-slate-700 outline-none focus:border-indigo-500 h-96 resize-none leading-relaxed" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})} placeholder="Escreva as instruções de uso aqui..."></textarea>
                                             </>
                                         )}
 
+                                        {/* RESTAURAÇÃO DO FORMULÁRIO DE CONTRATO */}
                                         {modalType === 'contract' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Cliente</label>
-                                                        <select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}>
-                                                            <option value="">Selecionar Cliente...</option>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}>
+                                                            <option value="">Selecione o Cliente...</option>
                                                             {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
                                                         </select>
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Projeto</label>
-                                                        <select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}>
-                                                            <option value="">Selecionar Projeto...</option>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Projeto Relacionado</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}>
+                                                            <option value="">Selecione o Projeto...</option>
                                                             {projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                                                         </select>
                                                     </div>
                                                 </div>
                                                 <div className="grid grid-cols-3 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Início</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Fim</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Valor (R$)</label><input type="number" className="w-full p-3 border rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Início</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Fim</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor (R$)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div className="flex justify-between items-center mt-4 mb-2">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase">Minuta Jurídica</label>
-                                                    <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"><Icon name="magic-wand" weight="bold"/> Gerar Minuta</button>
+                                                <div className="flex justify-between items-center mb-2 mt-4">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Minuta Jurídica</label>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-indigo-700 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Minuta Jurídica</button>
+                                                        {editingItem && (
+                                                            <button type="button" onClick={() => {
+                                                                const blob = new Blob([`<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${contractForm.content}</pre></body></html>`], {type: 'application/msword'});
+                                                                const url = URL.createObjectURL(blob);
+                                                                const a = document.createElement('a'); a.href=url; a.download=`Contrato_${editingItem.title}.doc`; a.click();
+                                                            }} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-emerald-700 transition-all"><Icon name="download-simple" weight="bold"/> Baixar DOC</button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <textarea className="w-full p-4 border rounded-xl font-mono text-xs h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Texto do contrato..."></textarea>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Clique em 'Gerar Minuta' ou escreva o texto do contrato aqui..."></textarea>
                                             </>
                                         )}
                                     </div>
 
-                                    <div className="p-6 border-t bg-white rounded-b-3xl flex gap-3 flex-none">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold rounded-xl text-xs uppercase transition-all">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg text-xs uppercase flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar Dados</button>
+                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all">Cancelar</button>
+                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar Dados</button>
                                     </div>
                                 </form>
                             </div>
@@ -935,3 +1267,4 @@ Data de Geração: ${new Date().toLocaleDateString()}
     </script>
 </body>
 </html>
+
