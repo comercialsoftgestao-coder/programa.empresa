@@ -1,14 +1,14 @@
 /**
  * Service Worker Otimizado para SOFTGESTÃO
- * Versão: 6.0 (Ícones PNG para Android)
+ * Versão: 6.1 (PWA via Blob - sem manifest físico)
  */
 
-const CACHE_NAME = 'softgestao-v6';
+const CACHE_NAME = 'softgestao-v6.1';
 
 const urlsToCache = [
     './',
     'index.html',
-    'manifest.json',
+    // manifest.json removido (agora é dinâmico via Blob)
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/react@18/umd/react.production.min.js',
     'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
