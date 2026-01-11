@@ -1,15 +1,10 @@
-// Service Worker v16 - SoftGestão - OTIMIZADO iOS
-const CACHE_NAME = 'softgestao-v16-2026';
+// Service Worker - SoftGestão - VERSÃO LIMPA
+const CACHE_NAME = 'softgestao-clean-2026';
 
-// Recursos CRÍTICOS - instalados individualmente
-const CRITICAL_RESOURCES = [
+// Lista de recursos para cachear
+const urlsToCache = [
     './',
     './index.html',
-    './manifest.json'
-];
-
-// CDNs e Bibliotecas - instaladas separadamente
-const CDN_RESOURCES = [
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/react@18/umd/react.production.min.js',
     'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
@@ -19,140 +14,73 @@ const CDN_RESOURCES = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap'
 ];
 
-// INSTALL - Instalação ROBUSTA individual
+// INSTALL
 self.addEventListener('install', (event) => {
-    console.log('🔧 [SW v16] Instalando...');
+    console.log('SW: Instalando...');
+    self.skipWaiting();
 
     event.waitUntil(
-        caches.open(CACHE_NAME).then(async (cache) => {
-            console.log('📦 [v16] Abrindo cache...');
-
-            // 1. Cacheia recursos críticos PRIMEIRO
-            for (const url of CRITICAL_RESOURCES) {
-                try {
-                    await cache.add(url);
-                    console.log('✅ [v16] Crítico:', url);
-                } catch (err) {
-                    console.warn('⚠️ [v16] Falha crítico:', url, err);
-                }
-            }
-
-            // 2. Cacheia CDNs um por um (iOS precisa assim)
-            for (const url of CDN_RESOURCES) {
-                try {
-                    const response = await fetch(url, { 
-                        mode: 'cors',
-                        cache: 'no-cache' 
-                    });
-                    if (response.ok) {
-                        await cache.put(url, response);
-                        console.log('✅ [v16] CDN:', url);
-                    }
-                } catch (err) {
-                    console.warn('⚠️ [v16] Falha CDN:', url, err);
-                }
-            }
-
-            console.log('✅ [v16] Instalação completa!');
-            return self.skipWaiting();
-        })
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(urlsToCache))
+            .then(() => console.log('SW: Cache criado'))
+            .catch(err => console.error('SW: Erro ao cachear', err))
     );
 });
 
-// ACTIVATE - Limpa caches antigos
+// ACTIVATE
 self.addEventListener('activate', (event) => {
-    console.log('🚀 [v16] Ativando...');
+    console.log('SW: Ativando...');
 
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('🗑️ [v16] Removendo cache antigo:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        }).then(() => {
-            console.log('✅ [v16] Ativo e assumindo controle!');
-            return self.clients.claim();
-        })
+        caches.keys()
+            .then(cacheNames => {
+                return Promise.all(
+                    cacheNames.map(name => {
+                        if (name !== CACHE_NAME) {
+                            console.log('SW: Removendo cache antigo', name);
+                            return caches.delete(name);
+                        }
+                    })
+                );
+            })
+            .then(() => self.clients.claim())
     );
 });
 
-// FETCH - CACHE FIRST ABSOLUTO (iOS precisa disso)
+// FETCH - Estratégia simples
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Firebase/Firestore: sempre tenta online, fallback JSON vazio
-    if (url.hostname.includes('firebaseio.com') || 
-        url.hostname.includes('firestore.googleapis.com') ||
-        url.hostname.includes('identitytoolkit.googleapis.com') ||
-        url.hostname.includes('securetoken.googleapis.com') ||
-        url.hostname.includes('firebasestorage.googleapis.com')) {
-
-        event.respondWith(
-            fetch(event.request, { cache: 'no-store' })
-                .catch(() => {
-                    console.log('📡 [v16] Firebase offline');
-                    return new Response(JSON.stringify({ offline: true }), {
-                        headers: { 'Content-Type': 'application/json' },
-                        status: 200
-                    });
-                })
-        );
+    // Firebase: sempre online
+    if (url.hostname.includes('firebase') || 
+        url.hostname.includes('googleapis.com') && url.pathname.includes('firestore')) {
+        event.respondWith(fetch(event.request));
         return;
     }
 
-    // CACHE FIRST ABSOLUTO para tudo que não é Firebase
+    // Outros recursos: Cache First
     event.respondWith(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.match(event.request).then((cachedResponse) => {
-
-                // Se está em cache, retorna IMEDIATAMENTE (iOS precisa disso)
-                if (cachedResponse) {
-                    console.log('💾 [v16] Do cache:', url.pathname);
-                    return cachedResponse;
+        caches.match(event.request)
+            .then(cached => {
+                if (cached) {
+                    return cached;
                 }
-
-                // Se não está em cache, tenta buscar e cacheia
-                return fetch(event.request).then((networkResponse) => {
-
-                    // Só cacheia respostas válidas
-                    if (networkResponse && networkResponse.status === 200) {
-                        // Clone a resposta
-                        const responseClone = networkResponse.clone();
-
-                        // Cacheia assincronamente (não bloqueia)
-                        cache.put(event.request, responseClone).then(() => {
-                            console.log('💾 [v16] Cacheado:', url.pathname);
-                        });
-                    }
-
-                    return networkResponse;
-
-                }).catch((err) => {
-                    console.warn('⚠️ [v16] Offline e sem cache:', url.pathname);
-
-                    // Fallback para HTML - retorna index.html
-                    if (event.request.mode === 'navigate') {
-                        return cache.match('./index.html').then((fallback) => {
-                            return fallback || new Response('Offline', { 
-                                status: 503,
-                                statusText: 'Service Unavailable' 
-                            });
-                        });
-                    }
-
-                    // Para outros recursos, retorna erro
-                    return new Response('Network error', {
-                        status: 408,
-                        statusText: 'Request Timeout'
+                return fetch(event.request)
+                    .then(response => {
+                        if (response && response.status === 200) {
+                            const clone = response.clone();
+                            caches.open(CACHE_NAME)
+                                .then(cache => cache.put(event.request, clone));
+                        }
+                        return response;
                     });
-                });
-            });
-        })
+            })
+            .catch(() => {
+                if (event.request.mode === 'navigate') {
+                    return caches.match('./index.html');
+                }
+            })
     );
 });
 
-console.log('📱 [SW v16] SoftGestão carregado - iOS Optimized!');
+console.log('SW: Carregado');
