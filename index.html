@@ -1160,7 +1160,19 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Forma de Pagamento</label>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.payment_method} onChange={e => setProjectForm({...projectForm, payment_method: e.target.value})}>
+                                                            <option>Pix</option>
+                                                            <option>Boleto</option>
+                                                            <option>Cartão de Crédito</option>
+                                                            <option>Transferência</option>
+                                                            <option>Dinheiro</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
                                                 
                                                 <div className="pt-4 border-t border-slate-100">
                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
