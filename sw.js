@@ -1,9 +1,9 @@
 /**
  * Service Worker Otimizado para SOFTGESTÃO
- * Versão: 5.0 (Suporte total Offline e Instalação WebAPK)
+ * Versão: 6.0 (Ícones PNG para Android)
  */
 
-const CACHE_NAME = 'softgestao-web-app-v5';
+const CACHE_NAME = 'softgestao-v6';
 
 const urlsToCache = [
     './',
@@ -25,7 +25,7 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME).then((cache) => {
             return Promise.all(
                 urlsToCache.map(url => {
-                    return cache.add(url).catch(err => console.error('Erro ao cachear:', url));
+                    return cache.add(url).catch(err => console.error('Erro cache:', url));
                 })
             );
         })
@@ -54,13 +54,7 @@ self.addEventListener('fetch', (event) => {
         );
         return;
     }
-
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request);
-        })
+        caches.match(event.request).then((res) => res || fetch(event.request))
     );
 });
