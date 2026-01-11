@@ -4,72 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
-
-    <!-- PWA IMPLEMENTATION VIA BLOB (Instalação WebAPK Android) -->
-    <script>
-        (function() {
-            // Manifest dinâmico
-            const manifest = {
-                "name": "SOFTGESTÃO - Sistema Administrativo",
-                "short_name": "SoftGestão",
-                "description": "Sistema de Gestão Administrativa e Monitoramento de Projetos",
-                "start_url": "./",
-                "scope": "/",
-                "display": "standalone",
-                "orientation": "portrait",
-                "background_color": "#f8fafc",
-                "theme_color": "#4f46e5",
-                "icons": [
-                    {
-                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-                        "sizes": "192x192",
-                        "type": "image/svg+xml",
-                        "purpose": "any maskable"
-                    },
-                    {
-                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-                        "sizes": "512x512",
-                        "type": "image/svg+xml",
-                        "purpose": "any maskable"
-                    }
-                ]
-            };
-
-            // Criar Blob do manifest e injetar no DOM
-            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            const manifestURL = URL.createObjectURL(manifestBlob);
-            const linkManifest = document.createElement('link');
-            linkManifest.rel = 'manifest';
-            linkManifest.href = manifestURL;
-            document.head.appendChild(linkManifest);
-
-            // Meta tags PWA
-            const metaTheme = document.createElement('meta');
-            metaTheme.name = 'theme-color';
-            metaTheme.content = '#4f46e5';
-            document.head.appendChild(metaTheme);
-
-            const metaMobile = document.createElement('meta');
-            metaMobile.name = 'mobile-web-app-capable';
-            metaMobile.content = 'yes';
-            document.head.appendChild(metaMobile);
-
-            const metaApple = document.createElement('meta');
-            metaApple.name = 'apple-mobile-web-app-capable';
-            metaApple.content = 'yes';
-            document.head.appendChild(metaApple);
-
-            const metaAppleStatus = document.createElement('meta');
-            metaAppleStatus.name = 'apple-mobile-web-app-status-bar-style';
-            metaAppleStatus.content = 'black-translucent';
-            document.head.appendChild(metaAppleStatus);
-
-            const metaAppleTitle = document.createElement('meta');
-            metaAppleTitle.name = 'apple-mobile-web-app-title';
-            metaAppleTitle.content = 'SoftGestão';
-            document.head.appendChild(metaAppleTitle);
-        })();
-    </script>
     
     <!-- PWA IMPLEMENTATION VIA BLOB (Suporte total a Modo Avião) -->
     <script>
@@ -199,6 +133,64 @@
             #print-area-container, #print-area-container * { visibility: visible; }
             #print-area-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 40px; }
             .no-print { display: none !important; }
+        }
+    
+
+        /* ========== BOTÃO FLUTUANTE (FAB) - MOBILE ONLY ========== */
+        .fab-button {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            border: none;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab-button:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 12px 32px rgba(102, 126, 234, 0.6);
+        }
+
+        .fab-button:active {
+            transform: scale(0.95);
+        }
+
+        .fab-button svg {
+            width: 32px;
+            height: 32px;
+            color: white;
+        }
+
+        /* Mostrar apenas em mobile (até 768px) */
+        @media (max-width: 768px) {
+            .fab-button {
+                display: flex !important;
+            }
+        }
+
+        /* Animação de entrada */
+        @keyframes fabEntrance {
+            from {
+                transform: scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .fab-button {
+            animation: fabEntrance 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
     </style>
 </head>
@@ -1124,7 +1116,33 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                                         <thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead>
                                                         <tbody>${tableRows}</tbody>
                                                     </table>
-                                                </body></html>`;
+                                                
+
+<!-- Botão Flutuante (FAB) Mobile -->
+<div id="fab-container"></div>
+<script>
+    // Adicionar FAB após o React carregar
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const fabContainer = document.getElementById('fab-container');
+            if (fabContainer && typeof openModal === 'function') {
+                const fabButton = document.createElement('button');
+                fabButton.className = 'fab-button';
+                fabButton.title = 'Novo Projeto';
+                fabButton.setAttribute('aria-label', 'Criar novo projeto');
+                fabButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                `;
+                fabButton.onclick = () => window.openModal('project');
+                fabContainer.appendChild(fabButton);
+            }
+        }, 1000);
+    });
+</script>
+
+</body></html>`;
                                             const blob = new Blob([content], {type: 'application/msword'});
                                             const url = URL.createObjectURL(blob);
                                             const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
