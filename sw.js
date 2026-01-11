@@ -1,244 +1,180 @@
-const CACHE_NAME = 'reforma-master-v11-icons-fixed';
-const DYNAMIC_CACHE = 'reforma-dynamic-v11';
+// Service Worker - SoftGestão v1.1 - COMPLETO
+const CACHE_NAME = 'softgestao-v1-1-2026';
 
-// URLs críticas para cache imediato
-const CRITICAL_URLS = [
-  '/',
-  '/index.html',
-
-  // React e bibliotecas principais
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-
-  // Tailwind CSS
-  'https://cdn.tailwindcss.com',
-
-  // Chart.js
-  'https://cdn.jsdelivr.net/npm/chart.js',
-
-  // Phosphor Icons - CSS E FONTES
-  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/bold/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/fill/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css'
+const urlsToCache = [
+    './',
+    './index.html',
+    // CSS Frameworks
+    'https://cdn.tailwindcss.com',
+    // React
+    'https://unpkg.com/react@18/umd/react.production.min.js',
+    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+    'https://unpkg.com/@babel/standalone/babel.min.js',
+    // Chart.js
+    'https://cdn.jsdelivr.net/npm/chart.js',
+    // Phosphor Icons - TODOS os recursos
+    'https://unpkg.com/phosphor-icons@1.4.2/web',
+    'https://unpkg.com/phosphor-icons@1.4.2/src/css/phosphor.css',
+    'https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css',
+    // Google Fonts
+    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap'
 ];
 
-// Instalar Service Worker
+// INSTALL
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando Service Worker v11...');
-
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      console.log('[SW] Cacheando recursos críticos...');
-
-      // Usar allSettled para não quebrar se algum falhar
-      const results = await Promise.allSettled(
-        CRITICAL_URLS.map(url => 
-          cache.add(url).catch(err => {
-            console.warn(`[SW] Falha ao cachear ${url}:`, err);
-            return null;
-          })
-        )
-      );
-
-      const sucessos = results.filter(r => r.status === 'fulfilled').length;
-      console.log(`[SW] ${sucessos}/${CRITICAL_URLS.length} recursos cacheados`);
-
-      return cache;
-    }).then(() => {
-      console.log('[SW] Instalação completa! Ativando...');
-      return self.skipWaiting(); // Ativa imediatamente
-    })
-  );
-});
-
-// Ativar e limpar caches antigos
-self.addEventListener('activate', (event) => {
-  console.log('[SW] Ativando Service Worker v11...');
-
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_NAME && name !== DYNAMIC_CACHE)
-          .map(name => {
-            console.log('[SW] Deletando cache antigo:', name);
-            return caches.delete(name);
-          })
-      );
-    }).then(() => {
-      console.log('[SW] Service Worker v11 ativado!');
-      return self.clients.claim(); // Controla todas as páginas imediatamente
-    })
-  );
-});
-
-// Interceptar requisições
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Estratégia CACHE FIRST para fontes (WOFF, WOFF2, TTF)
-  if (request.url.match(/\.(woff2?|ttf|otf|eot)$/)) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) {
-          console.log('[SW] ✓ Fonte do cache:', url.pathname);
-          return cached;
-        }
-
-        console.log('[SW] ⬇ Baixando fonte:', url.pathname);
-        return fetch(request).then((response) => {
-          // Cachear a fonte para próxima vez
-          if (response.ok) {
-            return caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response.clone());
-              return response;
-            });
-          }
-          return response;
-        }).catch(err => {
-          console.error('[SW] ✗ Erro ao buscar fonte:', err);
-          return new Response('Fonte não disponível offline', { 
-            status: 404,
-            statusText: 'Not Found' 
-          });
-        });
-      })
-    );
-    return;
-  }
-
-  // Estratégia CACHE FIRST para CSS de ícones
-  if (request.url.includes('@phosphor-icons') || request.url.includes('style.css')) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) {
-          console.log('[SW] ✓ CSS ícones do cache');
-          return cached;
-        }
-
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            return caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response.clone());
-              return response;
-            });
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // Estratégia CACHE FIRST para CDNs (React, Tailwind, Chart.js)
-  if (
-    url.hostname.includes('unpkg.com') ||
-    url.hostname.includes('cdn.tailwindcss.com') ||
-    url.hostname.includes('cdn.jsdelivr.net')
-  ) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) {
-          console.log('[SW] ✓ CDN do cache:', url.hostname);
-          return cached;
-        }
-
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            return caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response.clone());
-              return response;
-            });
-          }
-          return response;
-        }).catch(() => {
-          console.warn('[SW] CDN offline:', url.hostname);
-          return new Response('{}', { 
-            headers: { 'Content-Type': 'application/javascript' }
-          });
-        });
-      })
-    );
-    return;
-  }
-
-  // Firebase - NETWORK FIRST com fallback
-  if (url.hostname.includes('firebaseio.com') || url.hostname.includes('googleapis.com')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            return caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response.clone());
-              return response;
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cached) => {
-            if (cached) {
-              console.log('[SW] ⚠ Firebase offline - usando cache');
-              return cached;
-            }
-            return new Response(JSON.stringify({ offline: true, error: 'Firebase offline' }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
-          });
-        })
-    );
-    return;
-  }
-
-  // Estratégia CACHE FIRST para outros recursos locais
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(request).then((response) => {
-        if (response.ok && request.method === 'GET') {
-          return caches.open(DYNAMIC_CACHE).then((cache) => {
-            cache.put(request, response.clone());
-            return response;
-          });
-        }
-        return response;
-      });
-    }).catch((err) => {
-      console.error('[SW] Erro no fetch:', err);
-
-      // Fallback para página offline
-      if (request.destination === 'document') {
-        return caches.match('/index.html');
-      }
-
-      return new Response('Recurso não disponível offline', {
-        status: 503,
-        statusText: 'Service Unavailable'
-      });
-    })
-  );
-});
-
-// Mensagens do app
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('🔧 SW instalando...');
     self.skipWaiting();
-  }
 
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
     event.waitUntil(
-      caches.keys().then((names) => {
-        return Promise.all(names.map(name => caches.delete(name)));
-      }).then(() => {
-        return self.clients.matchAll();
-      }).then((clients) => {
-        clients.forEach(client => client.postMessage({ type: 'CACHE_CLEARED' }));
-      })
+        caches.open(CACHE_NAME).then(cache => {
+            console.log('📦 Cacheando recursos...');
+            return Promise.allSettled(
+                urlsToCache.map(url => 
+                    cache.add(url).catch(err => 
+                        console.warn('⚠️ Falha:', url)
+                    )
+                )
+            );
+        }).then(() => console.log('✅ Cache OK!'))
     );
-  }
 });
+
+// ACTIVATE
+self.addEventListener('activate', (event) => {
+    console.log('🚀 SW ativando...');
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheName !== CACHE_NAME) {
+                        console.log('🗑️ Removendo:', cacheName);
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
+    );
+});
+
+// FETCH - ESTRATÉGIA MELHORADA
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+
+    // Firebase: sempre buscar online, fallback vazio
+    if (url.hostname.includes('firebase') || 
+        url.hostname.includes('googleapis.com') && url.pathname.includes('identitytoolkit')) {
+        event.respondWith(
+            fetch(event.request).catch(() => 
+                new Response('{"offline":true}', {
+                    headers: {'Content-Type': 'application/json'}
+                })
+            )
+        );
+        return;
+    }
+
+    // FONTES (WOFF2, WOFF, TTF) - CACHE FIRST AGRESSIVO
+    if (event.request.url.match(/\.(woff2|woff|ttf|eot|otf)$/)) {
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) {
+                    console.log('📝 Fonte do cache:', event.request.url);
+                    return cached;
+                }
+                return fetch(event.request).then(response => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, clone);
+                            console.log('💾 Fonte cacheada:', event.request.url);
+                        });
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // CSS do Phosphor Icons e Google Fonts - CACHE FIRST
+    if (url.hostname.includes('fonts.googleapis.com') || 
+        url.hostname.includes('fonts.gstatic.com') ||
+        (url.hostname.includes('unpkg.com') && url.pathname.includes('phosphor'))) {
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) {
+                    return cached;
+                }
+                return fetch(event.request).then(response => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, clone);
+                        });
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // CDNs gerais - CACHE FIRST
+    if (url.hostname.includes('cdn.') || 
+        url.hostname.includes('unpkg.com') ||
+        url.hostname.includes('jsdelivr.net')) {
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) {
+                    return cached;
+                }
+                return fetch(event.request).then(response => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, clone);
+                        });
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // HTML - NETWORK FIRST
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request)
+                .then(response => {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, clone);
+                    });
+                    return response;
+                })
+                .catch(() => caches.match(event.request).then(cached => 
+                    cached || caches.match('./index.html')
+                ))
+        );
+        return;
+    }
+
+    // Outros recursos - CACHE FIRST
+    event.respondWith(
+        caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            return fetch(event.request).then(response => {
+                if (response && response.status === 200) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, clone);
+                    });
+                }
+                return response;
+            });
+        })
+    );
+});
+
+console.log('📱 SW SoftGestão v1.1 carregado!');
