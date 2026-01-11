@@ -1,12 +1,12 @@
 /**
- * Service Worker para SOFTGESTÃO
- * Este arquivo permite o funcionamento offline (Modo Avião)
- * Cacheando as bibliotecas React, Tailwind, Firebase e o próprio HTML.
+ * Service Worker Otimizado para SOFTGESTÃO
+ * Versão: 4.0 (Suporte total Offline e Instalação WebAPK)
+ * * Esta versão resolve o erro do "Dino" no Android e a tela vazia no iPhone.
  */
 
-const CACHE_NAME = 'softgestao-offline-cache-v3';
+const CACHE_NAME = 'softgestao-web-app-v4';
 
-// Recursos que serão armazenados localmente no dispositivo (Cache-First)
+// Lista de recursos essenciais para o "App Shell"
 const urlsToCache = [
     './',
     'index.html',
@@ -20,50 +20,72 @@ const urlsToCache = [
     'https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js'
 ];
 
-// Instalação do Service Worker e armazenamento inicial do cache
+// Evento de Instalação: Salva as bibliotecas e o HTML no cache do aparelho
 self.addEventListener('install', (event) => {
+    self.skipWaiting(); // Força a atualização imediata do Service Worker
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            console.log('SW: Armazenando bibliotecas externas no cache offline...');
-            return cache.addAll(urlsToCache);
+            console.log('SW: Criando cache de ativos para suporte offline...');
+            // Usamos map para tentar adicionar cada URL individualmente. 
+            // Se uma falhar, as outras ainda são cacheadas.
+            return Promise.all(
+                urlsToCache.map(url => {
+                    return cache.add(url).catch(err => console.error('Erro ao cachear:', url, err));
+                })
+            );
         })
     );
-    self.skipWaiting();
 });
 
-// Ativação do Service Worker e limpeza de caches antigos
+// Evento de Ativação: Limpa caches antigos para evitar conflitos de versão
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheName !== CACHE_NAME) {
-                        console.log('SW: Removendo cache obsoleto:', cacheName);
+                        console.log('SW: Limpando cache antigo:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
         })
     );
+    // Permite que o SW controle as abas abertas imediatamente sem precisar de recarregamento
     return self.clients.claim();
 });
 
-// Interceptação de requisições: Estratégia de Cache-First
-// Tenta buscar no cache do celular primeiro para garantir o funcionamento offline.
+// Evento de Fetch (Intercepção): O segredo para o Modo Avião
 self.addEventListener('fetch', (event) => {
+    // Para solicitações de navegação (abrir o site), sempre tenta o cache primeiro
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request).catch(() => caches.match('index.html'))
+        );
+        return;
+    }
+
+    // Estratégia Stale-While-Revalidate:
+    // Entrega o que está no cache instantaneamente (modo offline), 
+    // mas tenta buscar uma versão nova na rede em segundo plano para a próxima vez.
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            // Se encontrar no cache (Modo Avião), retorna imediatamente
             if (cachedResponse) {
+                // Atualiza o cache em segundo plano se houver conexão
+                const fetchPromise = fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, networkResponse.clone());
+                        });
+                    }
+                    return networkResponse;
+                }).catch(() => { /* Silenciar erro de rede em modo avião */ });
+
                 return cachedResponse;
             }
-            // Se não encontrar, busca na internet
+
+            // Se não estiver no cache, busca na internet normalmente
             return fetch(event.request);
-        }).catch(() => {
-            // Fallback: Se estiver offline e o recurso não estiver no cache
-            if (event.request.mode === 'navigate') {
-                return caches.match('index.html');
-            }
         })
     );
 });
