@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
     
-    <!-- PWA IMPLEMENTATION VIA BLOB (Suporte total a Modo Avião) -->
+    <!-- PWA IMPLEMENTATION (Registro via Arquivo Físico para suporte Offline Real) -->
     <script>
         (function() {
-            // 1. Definição do Manifesto Dinâmico
+            // 1. O Manifesto permanece via Blob (não interfere no escopo offline)
             const manifest = {
                 "name": "SOFTGESTÃO - Sistema Administrativo",
                 "short_name": "SoftGestão",
@@ -40,43 +40,12 @@
             pwaManifestLink.href = manifestURL;
             document.head.appendChild(pwaManifestLink);
 
-            // 2. Service Worker com estratégia de Cache-First para as bibliotecas externas
-            const swCode = `
-                const CACHE_NAME = 'softgestao-offline-v2';
-                const urlsToCache = [
-                    './',
-                    'https://cdn.tailwindcss.com',
-                    'https://unpkg.com/react@18/umd/react.production.min.js',
-                    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-                    'https://unpkg.com/@babel/standalone/babel.min.js',
-                    'https://cdn.jsdelivr.net/npm/chart.js',
-                    'https://unpkg.com/@phosphor-icons/web',
-                    'https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js',
-                    'https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js'
-                ];
-
-                self.addEventListener('install', (event) => {
-                    event.waitUntil(
-                        caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-                    );
-                    self.skipWaiting();
-                });
-
-                self.addEventListener('fetch', (event) => {
-                    event.respondWith(
-                        caches.match(event.request).then((response) => {
-                            return response || fetch(event.request);
-                        })
-                    );
-                });
-            `;
-
-            const swBlob = new Blob([swCode], {type: 'text/javascript'});
-            const swURL = URL.createObjectURL(swBlob);
-
+            // 2. Registro do Service Worker apontando para o arquivo físico 'sw.js'
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register(swURL).catch(err => console.log('PWA SW Error', err));
+                    navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('PWA: Service Worker (Físico) registrado com sucesso'))
+                    .catch(err => console.log('PWA: Erro ao registrar sw.js físico', err));
                 });
             }
         })();
@@ -156,13 +125,9 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Ativando Persistência Offline (Regra para Modo Avião funcionar no Android/iPhone)
+        // Ativação da Persistência de Dados para funcionamento Offline (Modo Avião)
         enableIndexedDbPersistence(db).catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.warn("Persistência falhou: Múltiplas abas abertas.");
-            } else if (err.code == 'unimplemented') {
-                console.warn("O navegador atual não suporta persistência.");
-            }
+            console.warn("Persistence Error:", err.code);
         });
 
         const { useState, useEffect, useMemo, useRef } = React;
@@ -383,6 +348,16 @@
                 }
             }, [userData, loading]);
 
+            // Cálculo das estatísticas (Stats)
+            const stats = useMemo(() => {
+                const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
+                const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
+                const activeProjects = projects.filter(p => ['Desenvolvimento', 'Briefing', 'Design'].includes(p.status)).length;
+                const pipelineValue = projects.filter(p => ['Desenvolvimento', 'Briefing'].includes(p.status)).reduce((a,b) => a + (b.value || 0), 0);
+                const supportClients = projects.filter(p => p.status === 'Suporte').length;
+                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
+            }, [financial, projects]);
+
             // GRÁFICO DASHBOARD
             useEffect(() => {
                 if (activeTab === 'dashboard' && chartRef.current) {
@@ -494,21 +469,7 @@
 
             const generateManualTemplate = () => {
                 if (!editingItem) return;
-                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}
-
-1. INTRODUÇÃO
-Este sistema foi desenvolvido para facilitar a gestão de sua empresa...
-
-2. ACESSO
-Para acessar, utilize sua URL e credenciais fornecidas...
-
-3. FUNCIONALIDADES
-- Cadastro de Itens
-- Relatórios
-- Monitoramento em tempo real
-
-4. SUPORTE
-Para suporte, entre em contato via WhatsApp ou E-mail.`;
+                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n\n1. INTRODUÇÃO\nEste sistema foi desenvolvido para facilitar a gestão de sua empresa...\n\n2. ACESSO\nPara acessar, utilize sua URL e credenciais fornecidas...\n\n3. FUNCIONALIDADES\n- Cadastro de Itens\n- Relatórios\n- Monitoramento em tempo real\n\n4. SUPORTE\nPara suporte, entre em contato via WhatsApp ou E-mail.`;
                 setManualForm({ content: template });
                 showToast('Template de manual gerado!', 'success');
             };
@@ -525,54 +486,13 @@ Para suporte, entre em contato via WhatsApp ou E-mail.`;
                 const startDateStr = formatDateDisplay(contractForm.start_date);
                 const endDateStr = contractForm.end_date ? formatDateDisplay(contractForm.end_date) : 'indeterminado';
 
-                const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
-================================================================================
-
-IDENTIFICAÇÃO DAS PARTES
-
-CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
-
-CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.
-
-CLÁUSULA PRIMEIRA - DO OBJETO
-1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software/sistema denominado "${project.title}" ("SOFTWARE"), bem como a prestação de serviços de suporte técnico relacionados.
-
-CLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA
-2.1. Todo o código-fonte, estruturas de banco de dados, design interfaces e demais elementos do SOFTWARE são de propriedade exclusiva e inalienável da CONTRATADA, sendo protegidos pela Lei de Software (Lei nº 9.609/98) e Lei de Direitos Autorais (Lei nº 9.610/98).
-2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, exclusiva e intransferível.
-2.3. É ESTRITAMENTE VEDADO à CONTRATANTE:
-    a) Vender, revender, alugar, sublicenciar ou ceder o SOFTWARE a terceiros, a título oneroso ou gratuito.
-    b) Utilizar o SOFTWARE para criar produtos derivados ou concorrentes (Engenharia Reversa).
-    c) Remover ou alterar avisos de direitos autorais ou marcas comerciais da CONTRATADA.
-2.4. A CONTRATANTE reconhece que o SOFTWARE não é um product "White Label" (marca branca), salvo se houver aditivo contratual específico e oneroso para tal fim.
-
-CLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS
-3.1. O descumprimento de qualquer cláusula deste contrato sujeitará a parte infratora ao pagamento de multa compensatória correspondente a 50% (cinquenta por cento) do valor total do contrato.
-3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).
-
-CLÁUSULA QUARTA - DO VALOR E FORMA DE PAGAMENTO
-4.1. Pelos serviços objeto deste contrato, a CONTRATANTE pagará à CONTRATADA o valor total de ${formatCurrency(value)}.
-
-CLÁUSULA QUINTA - DA CONFIDENCIALIDADE
-5.1. As partes comprometem-se a manter o mais absoluto sigilo sobre quaisquer dados, materiais, documentos, especificações técnicas ou comerciais e inovações de que venham a ter acesso ou conhecimento.
-
-CLÁUSULA SEXTA - DA VIGÊNCIA
-6.1. O presente contrato entra em vigor em ${startDateStr} e terá validade até ${endDateStr}, podendo ser renovado mediante termo aditivo.
-
-CLÁUSULA SÉTIMA - DO FORO
-7.1. Fica eleito o foro da Comarca de SÃO PAULO/SP para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro.
-
-E, por estarem assim justos e contratados, geram este instrumento eletronicamente.
-
-Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
-`;
+                const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS\n================================================================================\n\nIDENTIFICAÇÃO DAS PARTES\n\nCONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.\n\nCONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.\n\nCLÁUSULA PRIMEIRA - DO OBJETO\n1.1. O presente instrumento tem como objeto o desenvolvimento e licenciamento de uso do software/sistema denominado "${project.title}" ("SOFTWARE"), bem como a prestação de serviços de suporte técnico relacionados.\n\nCLÁUSULA SEGUNDA - DA PROPRIEDADE INTELECTUAL E VEDAÇÃO À REVENDA\n2.1. Todo o código-fonte, estruturas de banco de dados, design interfaces e demais elementos do SOFTWARE são de propriedade exclusiva e inalienável da CONTRATADA, sendo protegidos pela Lei de Software (Lei nº 9.609/98) e Lei de Direitos Autorais (Lei nº 9.610/98).\n2.2. A CONTRATADA concede à CONTRATANTE uma licença de uso, exclusiva e intransferível.\n2.3. É ESTRITAMENTE VEDADO à CONTRATANTE:\n    a) Vender, revender, alugar, sublicenciar ou ceder o SOFTWARE a terceiros, a título oneroso ou gratuito.\n    b) Utilizar o SOFTWARE para criar produtos derivados ou concorrentes (Engenharia Reversa).\n    c) Remover ou alterar avisos de direitos autorais ou marcas comerciais da CONTRATADA.\n2.4. A CONTRATANTE reconhece que o SOFTWARE não é um product "White Label" (marca branca), salvo se houver aditivo contratual específico e oneroso para tal fim.\n\nCLÁUSULA TERCEIRA - DAS PENALIDADES E MULTAS\n3.1. O descumprimento de qualquer cláusula deste contrato sujeitará a parte infratora ao pagamento de multa compensatória correspondente a 50% (cinquenta por cento) do valor total do contrato.\n3.2. CASO SEJA COMPROVADA A REVENDA, CÓPIA NÃO AUTORIZADA OU DISTRIBUIÇÃO DO CÓDIGO-FONTE A TERCEIROS, FICA ESTABELECIDA UMA MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO), sem prejuízo das perdas e danos e das medidas judiciais cabíveis (cíveis e criminais).\n\nCLÁUSULA QUARTA - DO VALOR E FORMA DE PAGAMENTO\n4.1. Pelos serviços objeto deste contrato, a CONTRATANTE pagará à CONTRATADA o valor total de ${formatCurrency(value)}.\n\nCLÁUSULA QUINTA - DA CONFIDENCIALIDADE\n5.1. As partes comprometem-se a manter o mais absoluto sigilo sobre quaisquer dados, materiais, documentos, especificações técnicas ou comerciais e inovações de que venham a ter acesso ou conhecimento.\n\nCLÁUSULA SEXTA - DA VIGÊNCIA\n6.1. O presente contrato entra em vigor em ${startDateStr} e terá validade até ${endDateStr}, podendo ser renovado mediante termo aditivo.\n\nCLÁUSULA SÉTIMA - DO FORO\n7.1. Fica eleito o foro da Comarca de SÃO PAULO/SP para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro.\n\nE, por estarem assim justos e contratados, geram este instrumento eletronicamente.\n\nData de Geração: ${new Date().toLocaleDateString('pt-BR')}\n`;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
                 showToast('Minuta Jurídica gerada com sucesso!', 'success');
             };
 
             const saveItem = async (e) => {
                 e.preventDefault();
-                
                 try {
                     if (modalType === 'project') {
                         const newItem = { ...projectForm, value: parseFloat(projectForm.value), client_id: String(projectForm.client_id), tasks: currentProjectTasks };
@@ -627,15 +547,6 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                     showToast("Erro ao salvar no banco de dados.", "error");
                 }
             };
-
-            const stats = useMemo(() => {
-                const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
-                const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
-                const activeProjects = projects.filter(p => ['Desenvolvimento', 'Briefing', 'Design'].includes(p.status)).length;
-                const pipelineValue = projects.filter(p => ['Desenvolvimento', 'Briefing'].includes(p.status)).reduce((a,b) => a + (b.value || 0), 0);
-                const supportClients = projects.filter(p => p.status === 'Suporte').length;
-                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
-            }, [financial, projects]);
 
             const menuItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: 'squares-four' },
@@ -693,7 +604,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                     <p className="text-sm font-bold text-white truncate">{userData.name}</p>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Online • Nuvem</p>
+                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Offline Ready</p>
                                     </div>
                                 </div>
                             </div>
