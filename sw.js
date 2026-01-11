@@ -1,152 +1,244 @@
-// Service Worker - SoftGestão v1.0
-const CACHE_NAME = 'softgestao-v1-2026';
+const CACHE_NAME = 'reforma-master-v11-icons-fixed';
+const DYNAMIC_CACHE = 'reforma-dynamic-v11';
 
-const urlsToCache = [
-    './',
-    './index.html',
-    'https://cdn.tailwindcss.com',
-    'https://unpkg.com/react@18/umd/react.production.min.js',
-    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-    'https://unpkg.com/@babel/standalone/babel.min.js',
-    'https://cdn.jsdelivr.net/npm/chart.js',
-    'https://unpkg.com/phosphor-icons@1.4.2/web',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap'
+// URLs críticas para cache imediato
+const CRITICAL_URLS = [
+  '/',
+  '/index.html',
+
+  // React e bibliotecas principais
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+
+  // Tailwind CSS
+  'https://cdn.tailwindcss.com',
+
+  // Chart.js
+  'https://cdn.jsdelivr.net/npm/chart.js',
+
+  // Phosphor Icons - CSS E FONTES
+  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css',
+  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/bold/style.css',
+  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/fill/style.css',
+  'https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css'
 ];
 
-// INSTALL - Cacheia recursos essenciais
+// Instalar Service Worker
 self.addEventListener('install', (event) => {
-    console.log('🔧 Service Worker instalando...');
-    self.skipWaiting();
+  console.log('[SW] Instalando Service Worker v11...');
 
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('📦 Cacheando recursos...');
-                // Cacheia recursos um por um para não falhar se algum der erro
-                return Promise.allSettled(
-                    urlsToCache.map(url => 
-                        cache.add(url).catch(err => {
-                            console.warn('⚠️ Falha ao cachear:', url, err);
-                        })
-                    )
-                );
-            })
-            .then(() => console.log('✅ Cache criado!'))
-    );
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      console.log('[SW] Cacheando recursos críticos...');
+
+      // Usar allSettled para não quebrar se algum falhar
+      const results = await Promise.allSettled(
+        CRITICAL_URLS.map(url => 
+          cache.add(url).catch(err => {
+            console.warn(`[SW] Falha ao cachear ${url}:`, err);
+            return null;
+          })
+        )
+      );
+
+      const sucessos = results.filter(r => r.status === 'fulfilled').length;
+      console.log(`[SW] ${sucessos}/${CRITICAL_URLS.length} recursos cacheados`);
+
+      return cache;
+    }).then(() => {
+      console.log('[SW] Instalação completa! Ativando...');
+      return self.skipWaiting(); // Ativa imediatamente
+    })
+  );
 });
 
-// ACTIVATE - Limpa caches antigos
+// Ativar e limpar caches antigos
 self.addEventListener('activate', (event) => {
-    console.log('🚀 Service Worker ativando...');
+  console.log('[SW] Ativando Service Worker v11...');
 
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('🗑️ Removendo cache antigo:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        }).then(() => {
-            console.log('✅ Service Worker ativo!');
-            return self.clients.claim();
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter(name => name !== CACHE_NAME && name !== DYNAMIC_CACHE)
+          .map(name => {
+            console.log('[SW] Deletando cache antigo:', name);
+            return caches.delete(name);
+          })
+      );
+    }).then(() => {
+      console.log('[SW] Service Worker v11 ativado!');
+      return self.clients.claim(); // Controla todas as páginas imediatamente
+    })
+  );
+});
+
+// Interceptar requisições
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Estratégia CACHE FIRST para fontes (WOFF, WOFF2, TTF)
+  if (request.url.match(/\.(woff2?|ttf|otf|eot)$/)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) {
+          console.log('[SW] ✓ Fonte do cache:', url.pathname);
+          return cached;
+        }
+
+        console.log('[SW] ⬇ Baixando fonte:', url.pathname);
+        return fetch(request).then((response) => {
+          // Cachear a fonte para próxima vez
+          if (response.ok) {
+            return caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, response.clone());
+              return response;
+            });
+          }
+          return response;
+        }).catch(err => {
+          console.error('[SW] ✗ Erro ao buscar fonte:', err);
+          return new Response('Fonte não disponível offline', { 
+            status: 404,
+            statusText: 'Not Found' 
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // Estratégia CACHE FIRST para CSS de ícones
+  if (request.url.includes('@phosphor-icons') || request.url.includes('style.css')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) {
+          console.log('[SW] ✓ CSS ícones do cache');
+          return cached;
+        }
+
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            return caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, response.clone());
+              return response;
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Estratégia CACHE FIRST para CDNs (React, Tailwind, Chart.js)
+  if (
+    url.hostname.includes('unpkg.com') ||
+    url.hostname.includes('cdn.tailwindcss.com') ||
+    url.hostname.includes('cdn.jsdelivr.net')
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) {
+          console.log('[SW] ✓ CDN do cache:', url.hostname);
+          return cached;
+        }
+
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            return caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, response.clone());
+              return response;
+            });
+          }
+          return response;
+        }).catch(() => {
+          console.warn('[SW] CDN offline:', url.hostname);
+          return new Response('{}', { 
+            headers: { 'Content-Type': 'application/javascript' }
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // Firebase - NETWORK FIRST com fallback
+  if (url.hostname.includes('firebaseio.com') || url.hostname.includes('googleapis.com')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            return caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, response.clone());
+              return response;
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then((cached) => {
+            if (cached) {
+              console.log('[SW] ⚠ Firebase offline - usando cache');
+              return cached;
+            }
+            return new Response(JSON.stringify({ offline: true, error: 'Firebase offline' }), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
         })
     );
+    return;
+  }
+
+  // Estratégia CACHE FIRST para outros recursos locais
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) {
+        return cached;
+      }
+
+      return fetch(request).then((response) => {
+        if (response.ok && request.method === 'GET') {
+          return caches.open(DYNAMIC_CACHE).then((cache) => {
+            cache.put(request, response.clone());
+            return response;
+          });
+        }
+        return response;
+      });
+    }).catch((err) => {
+      console.error('[SW] Erro no fetch:', err);
+
+      // Fallback para página offline
+      if (request.destination === 'document') {
+        return caches.match('/index.html');
+      }
+
+      return new Response('Recurso não disponível offline', {
+        status: 503,
+        statusText: 'Service Unavailable'
+      });
+    })
+  );
 });
 
-// FETCH - Estratégia de cache
-self.addEventListener('fetch', (event) => {
-    const url = new URL(event.request.url);
+// Mensagens do app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 
-    // Firebase/Google APIs: sempre online (não cachear dados do Firebase)
-    if (url.hostname.includes('firebaseio.com') || 
-        url.hostname.includes('firebasestorage') ||
-        url.hostname.includes('identitytoolkit') ||
-        url.pathname.includes('firebase')) {
-        event.respondWith(
-            fetch(event.request).catch(() => {
-                // Se offline, retorna resposta vazia JSON para evitar erro
-                return new Response('{"offline": true}', {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            })
-        );
-        return;
-    }
-
-    // Para CDNs e recursos externos: Cache First com Network Fallback
-    if (url.hostname.includes('cdn.') || 
-        url.hostname.includes('unpkg.com') || 
-        url.hostname.includes('googleapis.com') ||
-        url.hostname.includes('gstatic.com')) {
-        event.respondWith(
-            caches.match(event.request).then(cached => {
-                if (cached) {
-                    return cached;
-                }
-                return fetch(event.request).then(response => {
-                    if (response && response.status === 200) {
-                        const responseClone = response.clone();
-                        caches.open(CACHE_NAME).then(cache => {
-                            cache.put(event.request, responseClone);
-                        });
-                    }
-                    return response;
-                }).catch(err => {
-                    console.warn('⚠️ Offline e sem cache para:', event.request.url);
-                    return cached; // Retorna cache mesmo se antigo
-                });
-            })
-        );
-        return;
-    }
-
-    // Para HTML (navegação): Network First com Cache Fallback
-    if (event.request.mode === 'navigate') {
-        event.respondWith(
-            fetch(event.request)
-                .then(response => {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseClone);
-                    });
-                    return response;
-                })
-                .catch(() => {
-                    return caches.match(event.request).then(cached => {
-                        return cached || caches.match('./index.html');
-                    });
-                })
-        );
-        return;
-    }
-
-    // Para outros recursos: Cache First
-    event.respondWith(
-        caches.match(event.request)
-            .then(cached => {
-                if (cached) {
-                    return cached;
-                }
-
-                return fetch(event.request).then(response => {
-                    if (!response || response.status !== 200) {
-                        return response;
-                    }
-
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseClone);
-                    });
-
-                    return response;
-                }).catch(() => {
-                    console.warn('⚠️ Recurso não disponível offline:', event.request.url);
-                });
-            })
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((names) => {
+        return Promise.all(names.map(name => caches.delete(name)));
+      }).then(() => {
+        return self.clients.matchAll();
+      }).then((clients) => {
+        clients.forEach(client => client.postMessage({ type: 'CACHE_CLEARED' }));
+      })
     );
+  }
 });
-
-console.log('📱 Service Worker SoftGestão carregado!');
