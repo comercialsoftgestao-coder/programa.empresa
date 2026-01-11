@@ -146,10 +146,11 @@
             // Refs para Gráfico
             const chartRef = useRef(null);
             const chartInstance = useRef(null);
+            const textAreaRef = useRef(null);
 
             // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
-            // Status Automático dos Projetos (checking, online, offline)
+            // NOVO STATE: Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
@@ -174,7 +175,7 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
-            // TAREFAS DO PROJETO
+            // TAREFAS DO PROJETO (NOVO)
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
@@ -189,11 +190,12 @@
             // FUNÇÃO DE VERIFICAÇÃO DE SITE (PING)
             const checkProjectHealth = async (url) => {
                 if (!url) return 'offline';
+                // Adiciona https se não tiver
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
                 
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000); 
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout para ser generoso
 
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
                     
@@ -211,6 +213,7 @@
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
                         
+                        // Marca todos como "verificando" se ainda não tiverem status
                         const initialStatuses = {};
                         let needsUpdate = false;
                         projectsToMonitor.forEach(p => {
@@ -224,11 +227,13 @@
                             setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
                         }
 
+                        // Roda verificação em paralelo
                         projectsToMonitor.forEach(async (p) => {
                             if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
                                 
+                                // Auto-marca o checklist diário se estiver online
                                 if (status === 'online') {
                                     setDailyChecks(prev => ({...prev, [p.id]: true}));
                                 }
@@ -239,14 +244,17 @@
                 }
             }, [activeTab, projects]);
 
+            // Botão para forçar re-verificação
             const forceRecheckAll = () => {
-                setProjectStatus({}); 
+                setProjectStatus({}); // Limpa status
                 const projectsToMonitor = projects.filter(p => p.hosting_url);
                 
+                // Seta tudo para checking visualmente
                 const checkingState = {};
                 projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
                 setProjectStatus(checkingState);
 
+                // Dispara
                 projectsToMonitor.forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
@@ -254,6 +262,7 @@
                 });
                 showToast('Iniciando verificação completa...', 'info');
             };
+
 
             // CARREGAMENTO INICIAL DO FIREBASE
             useEffect(() => {
@@ -281,7 +290,7 @@
                 fetchAllData();
             }, []);
 
-            // PERSISTÊNCIA LOCAL PARA CONFIG
+            // PERSISTÊNCIA LOCAL APENAS PARA CONFIG (OPCIONAL)
             useEffect(() => {
                 if (!loading) {
                     localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
@@ -477,6 +486,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 
             const saveItem = async (e) => {
                 e.preventDefault();
+                
                 try {
                     if (modalType === 'project') {
                         const newItem = { ...projectForm, value: parseFloat(projectForm.value), client_id: String(projectForm.client_id), tasks: currentProjectTasks };
@@ -606,6 +616,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 
                     {/* MAIN CONTENT */}
                     <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                        {/* HEADER */}
                         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 sticky top-0">
                             <div className="flex items-center gap-4 flex-1">
                                 <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg"><Icon name="list" size={24} /></button>
@@ -633,6 +644,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                         </header>
 
                         <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                            
                             {/* DASHBOARD */}
                             {activeTab === 'dashboard' && (
                                 <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
@@ -672,6 +684,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                         </Card>
                                     </div>
 
+                                    {/* GRÁFICO E LISTAS */}
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                         <div className="col-span-2 space-y-8">
                                             <Card className="p-8 card-hover">
@@ -755,6 +768,7 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                         {projects.filter(p => p.hosting_url).map(p => {
                                             const isChecked = dailyChecks[p.id];
                                             const status = projectStatus[p.id] || 'checking';
+
                                             return (
                                                 <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
                                                     <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'checking' ? 'bg-blue-500 animate-pulse' : (status === 'online' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
@@ -841,6 +855,248 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                                 </div>
                                             </Card>
                                         ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ENTREGAS & MANUAIS */}
+                            {activeTab === 'deploy' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                            <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500">
+                                                <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
+                                                    <button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CONTRATOS JURÍDICOS */}
+                            {activeTab === 'contracts' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                        <div><h2 className="text-2xl font-black text-slate-800">Contratos Jurídicos</h2></div>
+                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 transition-all"><Icon name="plus" weight="bold"/> Novo Contrato</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {contracts.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                            <Card key={c.id} className="p-6 border-l-4 border-l-indigo-600">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</div>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                        <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                    </div>
+                                                </div>
+                                                <h3 className="text-lg font-black text-slate-800">{c.title}</h3>
+                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {formatDateDisplay(c.start_date)}</p>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* FINANCEIRO */}
+                            {activeTab === 'finance' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div><h2 className="text-xl font-bold text-slate-800">Fluxo de Caixa</h2></div>
+                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>
+                                            {financial.filter(f => f.type === 'Receita').map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div>
+                                                    <span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>
+                                            {financial.filter(f => f.type === 'Despesa').map(f => (
+                                                <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500">
+                                                    <div><p className="font-bold text-slate-800">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div>
+                                                    <span className="font-bold text-rose-600">{formatCurrency(f.value)}</span>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* RELATÓRIOS */}
+                            {activeTab === 'reports' && (
+                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+                                    <div className="flex flex-col">
+                                        <h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2>
+                                        <p className="text-sm text-slate-500">Exportação de dados formatada para Microsoft Word.</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {/* RELATÓRIO DE PROJETOS */}
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-indigo-500" onClick={() => {
+                                            const tableRows = projects.map(p => `
+                                                <tr>
+                                                    <td>${p.title}</td>
+                                                    <td>${clients.find(c => c.id === p.client_id)?.company || 'N/A'}</td>
+                                                    <td>${p.status}</td>
+                                                    <td>${formatCurrency(p.value)}</td>
+                                                    <td>${formatDateDisplay(p.deadline)}</td>
+                                                </tr>
+                                            `).join('');
+
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório de Projetos</title>
+                                                <style>
+                                                    body { font-family: 'Arial', sans-serif; }
+                                                    h1 { color: #4338ca; text-align: center; font-size: 24pt; margin-bottom: 20pt; }
+                                                    table { width: 100%; border-collapse: collapse; margin-top: 20pt; }
+                                                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 10pt; }
+                                                    th { background-color: #f3f4f6; font-weight: bold; color: #1f2937; }
+                                                    .header-info { margin-bottom: 30pt; font-size: 9pt; color: #6b7280; }
+                                                </style>
+                                                </head>
+                                                <body>
+                                                    <h1>RELATÓRIO DE PROJETOS</h1>
+                                                    <div class='header-info'>Gerado por: ${userData.name} em ${new Date().toLocaleString('pt-BR')}</div>
+                                                    <table>
+                                                        <thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead>
+                                                        <tbody>${tableRows}</tbody>
+                                                    </table>
+                                                </body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_projetos.doc'; a.click();
+                                            showToast("Relatório de Projetos gerado com sucesso!", "success");
+                                        }}>
+                                            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl w-fit mb-4"><Icon name="file-doc" size={28} weight="duotone" /></div>
+                                            <h3 className="font-bold text-slate-800">Projetos Ativos</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Lista completa com status, valores e prazos.</p>
+                                        </Card>
+
+                                        {/* RELATÓRIO FINANCEIRO */}
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-emerald-500" onClick={() => {
+                                            const tableRows = financial.map(f => `
+                                                <tr>
+                                                    <td>${formatDateDisplay(f.date)}</td>
+                                                    <td style="color: ${f.type === 'Receita' ? 'green' : 'red'}">${f.type}</td>
+                                                    <td>${f.description}</td>
+                                                    <td>${formatCurrency(f.value)}</td>
+                                                </tr>
+                                            `).join('');
+
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório Financeiro</title>
+                                                <style>
+                                                    body { font-family: 'Arial', sans-serif; }
+                                                    h1 { color: #059669; text-align: center; font-size: 24pt; margin-bottom: 20pt; }
+                                                    table { width: 100%; border-collapse: collapse; }
+                                                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 10pt; }
+                                                    th { background-color: #f3f4f6; }
+                                                </style>
+                                                </head>
+                                                <body>
+                                                    <h1>RELATÓRIO FINANCEIRO</h1>
+                                                    <p>Empresa: ${userData.name}</p>
+                                                    <table>
+                                                        <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead>
+                                                        <tbody>${tableRows}</tbody>
+                                                    </table>
+                                                </body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_financeiro.doc'; a.click();
+                                            showToast("Relatório de Financeiro gerado com sucesso!", "success");
+                                        }}>
+                                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl w-fit mb-4"><Icon name="bank" size={28} weight="duotone" /></div>
+                                            <h3 className="font-bold text-slate-800">Fluxo de Caixa</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Histórico de receitas e despesas lançadas.</p>
+                                        </Card>
+
+                                        {/* NOVO: RELATÓRIO DE CLIENTES */}
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-blue-500" onClick={() => {
+                                            const tableRows = clients.map(c => `
+                                                <tr>
+                                                    <td>${c.company}</td>
+                                                    <td>${c.cnpj_cpf}</td>
+                                                    <td>${c.email}</td>
+                                                    <td>${c.phone}</td>
+                                                </tr>
+                                            `).join('');
+
+                                            const content = `
+                                                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                <head><meta charset='utf-8'><title>Relatório de Clientes</title>
+                                                <style>
+                                                    body { font-family: 'Arial', sans-serif; }
+                                                    h1 { color: #2563eb; text-align: center; font-size: 20pt; }
+                                                    table { width: 100%; border-collapse: collapse; }
+                                                    th, td { border: 1px solid #ddd; padding: 8px; font-size: 9pt; }
+                                                    th { background-color: #f9fafb; }
+                                                </style></head>
+                                                <body>
+                                                    <h1>CARTEIRA DE CLIENTES</h1>
+                                                    <table>
+                                                        <thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>E-mail</th><th>Telefone</th></tr></thead>
+                                                        <tbody>${tableRows}</tbody>
+                                                    </table>
+                                                </body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_clientes.doc'; a.click();
+                                            showToast("Relatório de Clientes gerado!", "success");
+                                        }}>
+                                            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4"><Icon name="users" size={28} weight="duotone" /></div>
+                                            <h3 className="font-bold text-slate-800">Clientes</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Dados de contato e registro de todos os clientes.</p>
+                                        </Card>
+
+                                        {/* NOVO: RELATÓRIO DE HOSPEDAGENS E VENCIMENTOS */}
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-rose-500" onClick={() => {
+                                            const tableRows = projects.filter(p => p.hosting_url).map(p => `
+                                                <tr>
+                                                    <td>${p.title}</td>
+                                                    <td>${p.hosting_url}</td>
+                                                    <td>${formatDateDisplay(p.deploy_date)}</td>
+                                                    <td style="color: ${new Date(p.expiration_date) < new Date() ? 'red' : 'black'}">${formatDateDisplay(p.expiration_date)}</td>
+                                                </tr>
+                                            `).join('');
+
+                                            const content = `
+                                                <html><head><meta charset='utf-8'><title>Controle de Domínios</title>
+                                                <style>
+                                                    body { font-family: 'Arial', sans-serif; }
+                                                    h1 { color: #e11d48; text-align: center; }
+                                                    table { width: 100%; border-collapse: collapse; }
+                                                    th, td { border: 1px solid #ddd; padding: 8px; }
+                                                    th { background-color: #fff1f2; }
+                                                </style></head>
+                                                <body>
+                                                    <h1>CONTROLE DE HOSPEDAGENS E DOMÍNIOS</h1>
+                                                    <table>
+                                                        <thead><tr><th>Sistema</th><th>URL</th><th>Entrega</th><th>Expiração</th></tr></thead>
+                                                        <tbody>${tableRows}</tbody>
+                                                    </table>
+                                                </body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a'); a.href=url; a.download='relatorio_hospedagens.doc'; a.click();
+                                            showToast("Relatório de Hospedagens gerado!", "success");
+                                        }}>
+                                            <div className="p-3 bg-rose-50 text-rose-600 rounded-xl w-fit mb-4"><Icon name="globe-hemisphere-west" size={28} weight="duotone" /></div>
+                                            <h3 className="font-bold text-slate-800">Domínios & Hosting</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Controle de vencimentos e URLs publicadas.</p>
+                                        </Card>
                                     </div>
                                 </div>
                             )}
