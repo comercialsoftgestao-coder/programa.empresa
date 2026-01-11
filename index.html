@@ -175,6 +175,9 @@
             const [modalType, setModalType] = useState('');
             const [editingItem, setEditingItem] = useState(null);
             
+            // ESTADO PARA INSTALAÇÃO DO APP (PWA)
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+
             // Refs para Gráfico
             const chartRef = useRef(null);
             const chartInstance = useRef(null);
@@ -190,6 +193,34 @@
                     ...prev,
                     [id]: !prev[id]
                 }));
+            };
+
+            // Efeito para capturar o evento de instalação do PWA
+            useEffect(() => {
+                const handleBeforeInstallPrompt = (e) => {
+                    // Previne o Chrome de mostrar o prompt automaticamente (para customizar)
+                    e.preventDefault();
+                    // Guarda o evento para usar depois
+                    setDeferredPrompt(e);
+                };
+
+                window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+                return () => {
+                    window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+                };
+            }, []);
+
+            // Função para disparar a instalação
+            const handleInstallClick = async () => {
+                if (!deferredPrompt) return;
+                // Mostra o prompt nativo
+                deferredPrompt.prompt();
+                // Espera a escolha do usuário
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    setDeferredPrompt(null);
+                }
             };
 
             // FORMS
@@ -713,6 +744,13 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                     {item.label}
                                 </button>
                             ))}
+                            {/* BOTÃO DE INSTALAÇÃO DO APP (SÓ APARECE SE DISPONÍVEL) */}
+                            {deferredPrompt && (
+                                <button onClick={handleInstallClick} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm text-emerald-400 hover:bg-emerald-900/30 mt-4 border border-emerald-500/30 bg-emerald-500/10">
+                                    <Icon name="download-simple" size={20} weight="bold" />
+                                    Instalar Aplicativo
+                                </button>
+                            )}
                         </nav>
                         <div className="p-4 bg-slate-800/50 m-4 rounded-xl border border-slate-700">
                             <div className="flex items-center gap-3">
@@ -756,6 +794,14 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                                 </button>
                             </div>
                         </header>
+
+                        {/* MOBILE FAB - BOTÃO FLUTUANTE PARA CRIAR PROJETO NO CELULAR */}
+                        <button
+                            onClick={() => openModal('project')}
+                            className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center z-50 animate-fade-in hover:scale-110 transition-transform active:scale-95"
+                        >
+                            <Icon name="plus" size={28} weight="bold"/>
+                        </button>
 
                         <div className="flex-1 overflow-y-auto p-4 md:p-8">
                             
