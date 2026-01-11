@@ -5,81 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
     
-    <!-- PWA IMPLEMENTATION VIA BLOB (Suporte total a Modo Avião) -->
+    <!-- PWA Configuration (Apontando para o arquivo real) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SoftGestão">
+
+    <!-- Script de Registro do Service Worker Real (sw.js) -->
     <script>
-        (function() {
-            // 1. Definição do Manifesto Dinâmico
-            const manifest = {
-                "name": "SOFTGESTÃO - Sistema Administrativo",
-                "short_name": "SoftGestão",
-                "description": "Sistema de Gestão Administrativa e Monitoramento",
-                "start_url": "./",
-                "display": "standalone",
-                "background_color": "#f8fafc",
-                "theme_color": "#4f46e5",
-                "icons": [
-                    {
-                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-                        "sizes": "192x192",
-                        "type": "image/svg+xml",
-                        "purpose": "any maskable"
-                    },
-                    {
-                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-                        "sizes": "512x512",
-                        "type": "image/svg+xml",
-                        "purpose": "any maskable"
-                    }
-                ]
-            };
-
-            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            const manifestURL = URL.createObjectURL(manifestBlob);
-            const pwaManifestLink = document.createElement('link');
-            pwaManifestLink.rel = 'manifest';
-            pwaManifestLink.href = manifestURL;
-            document.head.appendChild(pwaManifestLink);
-
-            // 2. Service Worker com estratégia de Cache-First para as bibliotecas externas
-            const swCode = `
-                const CACHE_NAME = 'softgestao-offline-v2';
-                const urlsToCache = [
-                    './',
-                    'https://cdn.tailwindcss.com',
-                    'https://unpkg.com/react@18/umd/react.production.min.js',
-                    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-                    'https://unpkg.com/@babel/standalone/babel.min.js',
-                    'https://cdn.jsdelivr.net/npm/chart.js',
-                    'https://unpkg.com/@phosphor-icons/web',
-                    'https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js',
-                    'https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js'
-                ];
-
-                self.addEventListener('install', (event) => {
-                    event.waitUntil(
-                        caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-                    );
-                    self.skipWaiting();
-                });
-
-                self.addEventListener('fetch', (event) => {
-                    event.respondWith(
-                        caches.match(event.request).then((response) => {
-                            return response || fetch(event.request);
-                        })
-                    );
-                });
-            `;
-
-            const swBlob = new Blob([swCode], {type: 'text/javascript'});
-            const swURL = URL.createObjectURL(swBlob);
-
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register(swURL).catch(err => console.log('PWA SW Error', err));
-                });
-            }
-        })();
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('Service Worker registrado com sucesso:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('Falha ao registrar Service Worker:', error);
+                    });
+            });
+        }
     </script>
     
     <!-- Tailwind CSS -->
@@ -135,14 +81,6 @@
             .no-print { display: none !important; }
         }
     </style>
-
-    <!-- PWA Configuration -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4f46e5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="SoftGestão">
 </head>
 <body class="bg-pattern-tech text-slate-800">
     <div id="root"></div>
@@ -669,6 +607,88 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                 }
             };
 
+            // ===== FUNÇÕES DE GERAÇÃO DE RELATÓRIOS =====
+            // 1. Relatório de Projetos
+            const generateProjectReport = () => {
+                const tableRows = projects.map(p => `
+                    <tr>
+                        <td>${p.title}</td>
+                        <td>${clients.find(c => c.id === p.client_id)?.company || 'N/A'}</td>
+                        <td>${p.status}</td>
+                        <td>${formatCurrency(p.value)}</td>
+                        <td>${formatDateDisplay(p.deadline)}</td>
+                    </tr>
+                `).join('');
+                const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório de Projetos</title><style>body{font-family:Arial;margin:30pt;}h1{color:#4f46e5;text-align:center;font-size:18pt;margin-bottom:10pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:10px;text-align:left;font-size:9pt;}th{background-color:#f3f4f6;font-weight:bold;}.header-info{margin-bottom:30pt;font-size:9pt;}</style></head><body><h1>RELATÓRIO DE PROJETOS</h1><div class='header-info'>Gerado por: ${userData.name}</div><table><thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                const blob = new Blob([content], {type: 'application/msword'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorio_projetos.doc';
+                a.click();
+                showToast("Relatório de Projetos gerado com sucesso!", "success");
+            };
+
+            // 2. Relatório Financeiro
+            const generateFinancialReport = () => {
+                const tableRows = financial.map(f => `
+                    <tr>
+                        <td>${formatDateDisplay(f.date)}</td>
+                        <td style="color: ${f.type === 'Receita' ? 'green' : 'red'};">${f.type}</td>
+                        <td>${f.description}</td>
+                        <td>${formatCurrency(f.value)}</td>
+                    </tr>
+                `).join('');
+                const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório Financeiro</title><style>body{font-family:Arial;margin:30pt;}h1{color:#10b981;text-align:center;font-size:18pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:10px;text-align:left;font-size:9pt;}th{background-color:#f3f4f6;}</style></head><body><h1>RELATÓRIO FINANCEIRO</h1><p>Empresa: ${userData.name}</p><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                const blob = new Blob([content], {type: 'application/msword'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorio_financeiro.doc';
+                a.click();
+                showToast("Relatório de Financeiro gerado com sucesso!", "success");
+            };
+
+            // 3. Relatório de Clientes
+            const generateClientsReport = () => {
+                const tableRows = clients.map(c => `
+                    <tr>
+                        <td>${c.company}</td>
+                        <td>${c.cnpj_cpf}</td>
+                        <td>${c.email}</td>
+                        <td>${c.phone}</td>
+                    </tr>
+                `).join('');
+                const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Carteira de Clientes</title><style>body{font-family:Arial;margin:30pt;}h1{color:#2563eb;text-align:center;font-size:18pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:8px;font-size:9pt;}th{background-color:#f9fafb;}</style></head><body><h1>CARTEIRA DE CLIENTES</h1><table><thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>E-mail</th><th>Telefone</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                const blob = new Blob([content], {type: 'application/msword'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorio_clientes.doc';
+                a.click();
+                showToast("Relatório de Clientes gerado!", "success");
+            };
+
+            // 4. Relatório de Hospedagens
+            const generateHostingReport = () => {
+                const tableRows = projects.filter(p => p.hosting_url).map(p => `
+                    <tr>
+                        <td>${p.title}</td>
+                        <td>${p.hosting_url}</td>
+                        <td>${formatDateDisplay(p.deploy_date)}</td>
+                        <td style="color: ${new Date(p.expiration_date) < new Date() ? 'red' : 'green'};">${formatDateDisplay(p.expiration_date)}</td>
+                    </tr>
+                `).join('');
+                const content = `<html><head><meta charset='utf-8'><title>Controle de Hospedagens</title><style>body{font-family:Arial;margin:30pt;}h1{color:#e11d48;text-align:center;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:8px;}th{background-color:#fff1f2;}</style></head><body><h1>CONTROLE DE HOSPEDAGENS E DOMÍNIOS</h1><table><thead><tr><th>Sistema</th><th>URL</th><th>Envio</th><th>Vencimento</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                const blob = new Blob([content], {type: 'application/msword'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorio_hospedagens.doc';
+                a.click();
+                showToast("Relatório de Hospedagens gerado!", "success");
+            };
+
             return (
                 <div className="flex h-screen overflow-hidden text-slate-700 font-sans">
                     <Toast {...toast} onClose={() => setToast({...toast, show: false})} />
@@ -1027,43 +1047,6 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                             )}
 
                             {/* RELATÓRIOS */}
-                            {/* ===== FUNÇÕES DE GERAÇÃO DE RELATÓRIOS ===== */}
-                            {(() => {
-                                window.generateProjectReport = () => {
-                                    const tableRows = projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c => c.id === p.client_id)?.company || 'N/A'}</td><td>${p.status}</td><td>${formatCurrency(p.value)}</td><td>${formatDateDisplay(p.deadline)}</td></tr>`).join('');
-                                    const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório de Projetos</title><style>body{font-family:Arial;margin:30pt;}h1{color:#4f46e5;text-align:center;font-size:18pt;margin-bottom:10pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:10px;text-align:left;font-size:9pt;}th{background-color:#f3f4f6;font-weight:bold;}.header-info{margin-bottom:30pt;font-size:9pt;}</style></head><body><h1>RELATÓRIO DE PROJETOS</h1><div class='header-info'>Gerado por: ${userData.name}</div><table><thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                    const blob = new Blob([content], {type: 'application/msword'});
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a'); a.href = url; a.download = 'relatorio_projetos.doc'; a.click();
-                                    showToast("Relatório de Projetos gerado com sucesso!", "success");
-                                };
-                                window.generateFinancialReport = () => {
-                                    const tableRows = financial.map(f => `<tr><td>${formatDateDisplay(f.date)}</td><td style="color: ${f.type === 'Receita' ? 'green' : 'red'};">${f.type}</td><td>${f.description}</td><td>${formatCurrency(f.value)}</td></tr>`).join('');
-                                    const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório Financeiro</title><style>body{font-family:Arial;margin:30pt;}h1{color:#10b981;text-align:center;font-size:18pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:10px;text-align:left;font-size:9pt;}th{background-color:#f3f4f6;}</style></head><body><h1>RELATÓRIO FINANCEIRO</h1><p>Empresa: ${userData.name}</p><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                    const blob = new Blob([content], {type: 'application/msword'});
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a'); a.href = url; a.download = 'relatorio_financeiro.doc'; a.click();
-                                    showToast("Relatório Financeiro gerado com sucesso!", "success");
-                                };
-                                window.generateClientsReport = () => {
-                                    const tableRows = clients.map(c => `<tr><td>${c.company}</td><td>${c.cnpj_cpf}</td><td>${c.email}</td><td>${c.phone}</td></tr>`).join('');
-                                    const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Carteira de Clientes</title><style>body{font-family:Arial;margin:30pt;}h1{color:#2563eb;text-align:center;font-size:18pt;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:8px;font-size:9pt;}th{background-color:#f9fafb;}</style></head><body><h1>CARTEIRA DE CLIENTES</h1><table><thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>E-mail</th><th>Telefone</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                    const blob = new Blob([content], {type: 'application/msword'});
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a'); a.href = url; a.download = 'relatorio_clientes.doc'; a.click();
-                                    showToast("Relatório de Clientes gerado!", "success");
-                                };
-                                window.generateHostingReport = () => {
-                                    const tableRows = projects.filter(p => p.hosting_url).map(p => `<tr><td>${p.title}</td><td>${p.hosting_url}</td><td>${formatDateDisplay(p.deploy_date)}</td><td style="color: ${new Date(p.expiration_date) < new Date() ? 'red' : 'green'};">${formatDateDisplay(p.expiration_date)}</td></tr>`).join('');
-                                    const content = `<html><head><meta charset='utf-8'><title>Controle de Hospedagens</title><style>body{font-family:Arial;margin:30pt;}h1{color:#e11d48;text-align:center;}table{width:100%;border-collapse:collapse;margin-top:20pt;}th,td{border:1px solid #ddd;padding:8px;}th{background-color:#fff1f2;}</style></head><body><h1>CONTROLE DE HOSPEDAGENS E DOMÍNIOS</h1><table><thead><tr><th>Sistema</th><th>URL</th><th>Envio</th><th>Vencimento</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                    const blob = new Blob([content], {type: 'application/msword'});
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a'); a.href = url; a.download = 'relatorio_hospedagens.doc'; a.click();
-                                    showToast("Relatório de Hospedagens gerado!", "success");
-                                };
-                                return null;
-                            })()}
-
                             {activeTab === 'reports' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex flex-col">
@@ -1073,28 +1056,28 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                         {/* RELATÓRIO DE PROJETOS */}
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer" onClick={() => window.generateProjectReport()}>
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-indigo-500" onClick={generateProjectReport}>
                                             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl w-fit mb-4"><Icon name="file-doc" size={28} weight="duotone" /></div>
                                             <h3 className="font-bold text-slate-800">Projetos Ativos</h3>
                                             <p className="text-xs text-slate-400 mt-1">Lista completa com status, valores e prazos.</p>
                                         </Card>
 
                                         {/* RELATÓRIO FINANCEIRO */}
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer" onClick={() => window.generateFinancialReport()}>
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-emerald-500" onClick={generateFinancialReport}>
                                             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl w-fit mb-4"><Icon name="bank" size={28} weight="duotone" /></div>
                                             <h3 className="font-bold text-slate-800">Fluxo de Caixa</h3>
                                             <p className="text-xs text-slate-400 mt-1">Histórico de receitas e despesas lançadas.</p>
                                         </Card>
 
                                         {/* NOVO: RELATÓRIO DE CLIENTES */}
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer" onClick={() => window.generateClientsReport()}>
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-blue-500" onClick={generateClientsReport}>
                                             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4"><Icon name="users" size={28} weight="duotone" /></div>
                                             <h3 className="font-bold text-slate-800">Clientes</h3>
                                             <p className="text-xs text-slate-400 mt-1">Dados de contato e registro de todos os clientes.</p>
                                         </Card>
 
                                         {/* NOVO: RELATÓRIO DE HOSPEDAGENS E VENCIMENTOS */}
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer" onClick={() => window.generateHostingReport()}>
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-rose-500" onClick={generateHostingReport}>
                                             <div className="p-3 bg-rose-50 text-rose-600 rounded-xl w-fit mb-4"><Icon name="globe-hemisphere-west" size={28} weight="duotone" /></div>
                                             <h3 className="font-bold text-slate-800">Domínios & Hosting</h3>
                                             <p className="text-xs text-slate-400 mt-1">Controle de vencimentos e URLs publicadas.</p>
