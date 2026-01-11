@@ -5,12 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
     
-    <!-- PWA Meta Tags para Mobile -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#4f46e5">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/606/606548.png">
-
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -33,6 +27,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; user-select: none; }
         
+        /* Padrão Tech no Fundo */
         .bg-pattern-tech {
             background-color: #f1f5f9;
             background-image: linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px);
@@ -50,6 +45,7 @@
         .card-hover { transition: all 0.3s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.15); }
 
+        /* Estilos de Impressão */
         .print-area { font-family: 'Inter', sans-serif; line-height: 1.6; }
         .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
         .print-table th, .print-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
@@ -62,36 +58,6 @@
             .no-print { display: none !important; }
         }
     </style>
-
-    <!-- Implementação PWA via Blobs e DataURI para fix de erro de protocolo -->
-    <script>
-        (function() {
-            const manifest = {
-                name: "SOFTGESTÃO - Admin",
-                short_name: "SoftGestão",
-                description: "Sistema Administrativo SoftGestão",
-                start_url: ".",
-                display: "standalone",
-                orientation: "portrait",
-                background_color: "#f8fafc",
-                theme_color: "#4f46e5",
-                icons: [{ src: "https://cdn-icons-png.flaticon.com/512/606/606548.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }]
-            };
-            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            const manifestLink = document.createElement('link');
-            manifestLink.rel = 'manifest';
-            manifestLink.href = URL.createObjectURL(manifestBlob);
-            document.head.appendChild(manifestLink);
-
-            if ('serviceWorker' in navigator) {
-                const swCode = "self.addEventListener('fetch', (event) => { event.respondWith(fetch(event.request)); });";
-                const swDataURI = "data:text/javascript;base64," + btoa(swCode);
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register(swDataURI).catch(err => console.log("PWA: Modo offline limitado no ambiente atual."));
-                });
-            }
-        })();
-    </script>
 </head>
 <body class="bg-pattern-tech text-slate-800">
     <div id="root"></div>
@@ -149,15 +115,16 @@
 
         const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
+        // --- UTILITY PARA CORREÇÃO DE DATA ---
         const formatDateDisplay = (dateStr) => {
             if (!dateStr) return '---';
+            // Garante que a data string YYYY-MM-DD seja lida como UTC para evitar erro de fuso horário
             return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
         };
 
         // --- APP PRINCIPAL ---
         function App() {
-            const [appState, setAppState] = useState('authenticated'); 
-            
+            // DADOS E ESTADOS
             const [userData, setUserData] = useState(() => {
                 const saved = localStorage.getItem('softgestao_userdata');
                 return saved ? JSON.parse(saved) : { name: 'CEO SoftGestão', email: 'contato@softgestao.com.br', cnpj: '00.000.000/0001-00', address: 'Av. Paulista, 1000 - SP' };
@@ -165,28 +132,34 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]); 
+            const [contracts, setContracts] = useState([]); // Orçamentos/Contratos
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState(''); 
+            const [searchTerm, setSearchTerm] = useState(''); // ESTADO DE PESQUISA
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
             const [editingItem, setEditingItem] = useState(null);
             
+            // Refs para Gráfico
             const chartRef = useRef(null);
             const chartInstance = useRef(null);
 
+            // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
+            // Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
-                setDailyChecks(prev => ({ ...prev, [id]: !prev[id] }));
+                setDailyChecks(prev => ({
+                    ...prev,
+                    [id]: !prev[id]
+                }));
             };
 
-            // FORMS ORIGINAIS
+            // FORMS
             const [projectForm, setProjectForm] = useState({ 
                 title: '', client_id: '', type: 'Website', deadline: '', 
                 description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', 
@@ -201,35 +174,64 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
+            // TAREFAS DO PROJETO
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
             const showToast = (msg, type = 'info') => { setToast({ show: true, message: msg, type }); setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 3000); };
 
-            useEffect(() => { setSearchTerm(''); }, [activeTab]);
+            // Resetar pesquisa ao trocar de aba
+            useEffect(() => {
+                setSearchTerm('');
+            }, [activeTab]);
 
+            // FUNÇÃO DE VERIFICAÇÃO DE SITE (PING)
             const checkProjectHealth = async (url) => {
                 if (!url) return 'offline';
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+                
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); 
+
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
+                    
                     clearTimeout(timeoutId);
                     return 'online';
-                } catch (error) { return 'offline'; }
+                } catch (error) {
+                    console.warn(`Erro ao verificar ${formattedUrl}:`, error);
+                    return 'offline';
+                }
             };
 
+            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA AO ENTRAR NA ABA MONITORAMENTO
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
-                        projectsToMonitor.forEach(async (p) => {
+                        
+                        const initialStatuses = {};
+                        let needsUpdate = false;
+                        projectsToMonitor.forEach(p => {
                             if (!projectStatus[p.id]) {
+                                initialStatuses[p.id] = 'checking';
+                                needsUpdate = true;
+                            }
+                        });
+
+                        if (needsUpdate) {
+                            setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
+                        }
+
+                        projectsToMonitor.forEach(async (p) => {
+                            if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
-                                if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
+                                
+                                if (status === 'online') {
+                                    setDailyChecks(prev => ({...prev, [p.id]: true}));
+                                }
                             }
                         });
                     };
@@ -238,57 +240,123 @@
             }, [activeTab, projects]);
 
             const forceRecheckAll = () => {
-                setProjectStatus({});
-                projects.filter(p => p.hosting_url).forEach(async (p) => {
+                setProjectStatus({}); 
+                const projectsToMonitor = projects.filter(p => p.hosting_url);
+                
+                const checkingState = {};
+                projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
+                setProjectStatus(checkingState);
+
+                projectsToMonitor.forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
+                    if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
                 });
-                showToast('Verificando sites...', 'info');
+                showToast('Iniciando verificação completa...', 'info');
             };
 
+            // CARREGAMENTO INICIAL DO FIREBASE
             useEffect(() => {
                 const fetchAllData = async () => {
                     setLoading(true);
                     try {
                         const projectsSnap = await getDocs(collection(db, "projects"));
                         setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const clientsSnap = await getDocs(collection(db, "clients"));
                         setClients(clientsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const financeSnap = await getDocs(collection(db, "financial"));
                         setFinancial(financeSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const contractsSnap = await getDocs(collection(db, "contracts"));
                         setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
-                    } catch (err) { console.error(err); } finally { setLoading(false); }
+                    } catch (err) {
+                        console.error("Erro ao carregar dados do Firebase:", err);
+                        showToast("Erro ao conectar com o banco de dados.", "error");
+                    } finally {
+                        setLoading(false);
+                    }
                 };
                 fetchAllData();
             }, []);
 
+            // PERSISTÊNCIA LOCAL PARA CONFIG
             useEffect(() => {
-                if (!loading) localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
+                if (!loading) {
+                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
+                }
             }, [userData, loading]);
 
+            // GRÁFICO DASHBOARD
             useEffect(() => {
                 if (activeTab === 'dashboard' && chartRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
+
                     const ctx = chartRef.current.getContext('2d');
-                    const last6Months = Array.from({length: 6}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - i); return d; }).reverse();
+                    const last6Months = Array.from({length: 6}, (_, i) => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - i);
+                        return d;
+                    }).reverse();
+
                     const labels = last6Months.map(d => d.toLocaleString('pt-BR', { month: 'short' }));
-                    const incomeData = last6Months.map(date => financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear()).reduce((acc, curr) => acc + (curr.value || 0), 0));
-                    const expenseData = last6Months.map(date => financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear()).reduce((acc, curr) => acc + (curr.value || 0), 0));
-                    chartInstance.current = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 }, { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false } });
+                    
+                    const incomeData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
+                    const expenseData = last6Months.map(date => {
+                        return financial
+                            .filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear())
+                            .reduce((acc, curr) => acc + (curr.value || 0), 0);
+                    });
+
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 },
+                                { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
+                            scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' }, ticks: { font: { size: 10 } } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+                        }
+                    });
                 }
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
             }, [activeTab, financial]);
 
-            const handleSaveConfig = (e) => { e.preventDefault(); showToast('Dados atualizados!', 'success'); };
+            const handleSaveConfig = (e) => {
+                e.preventDefault();
+                showToast('Dados corporativos atualizados!', 'success');
+            };
 
             const deleteItem = async (id, list, setList) => {
-                if(confirm('Tem certeza que deseja excluir?')) {
+                if(confirm('Tem certeza que deseja excluir este registro?')) {
                     try {
-                        let col = list === projects ? 'projects' : (list === clients ? 'clients' : (list === financial ? 'financial' : 'contracts'));
-                        await deleteDoc(doc(db, col, id));
-                        setList(list.filter(i => i.id !== id));
-                        showToast('Registro excluído.', 'success');
-                    } catch (e) { showToast('Erro ao excluir.', 'error'); }
+                        let collectionName = '';
+                        if (list === projects) collectionName = 'projects';
+                        else if (list === clients) collectionName = 'clients';
+                        else if (list === financial) collectionName = 'financial';
+                        else if (list === contracts) collectionName = 'contracts';
+
+                        if (collectionName) {
+                            await deleteDoc(doc(db, collectionName, id));
+                            setList(list.filter(i => i.id !== id));
+                            showToast('Registro excluído com sucesso.', 'success');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showToast('Erro ao excluir registro.', 'error');
+                    }
                 }
             };
 
@@ -296,8 +364,14 @@
                 setModalType(type);
                 setEditingItem(item);
                 const today = new Date().toISOString().split('T')[0];
+
                 if (type === 'project') {
-                    setProjectForm(item || { title: '', client_id: '', type: 'Website', deadline: '', description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', priority: 'Média', hosting_url: '', deploy_date: '', expiration_date: '', manual_content: '', payment_method: 'Pix' });
+                    setProjectForm(item || { 
+                        title: '', client_id: '', type: 'Website', deadline: '', 
+                        description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', 
+                        priority: 'Média', hosting_url: '', deploy_date: '', expiration_date: '', manual_content: '',
+                        payment_method: 'Pix'
+                    });
                     setCurrentProjectTasks(item?.tasks || []);
                 }
                 else if (type === 'client') setClientForm(item || { name: '', company: '', email: '', phone: '', segment: 'Varejo', status: 'Ativo', cnpj_cpf: '' });
@@ -305,20 +379,54 @@
                 else if (type === 'hosting') setHostingForm({ hosting_url: item.hosting_url || '', deploy_date: item.deploy_date || '', expiration_date: item.expiration_date || '' });
                 else if (type === 'manual') setManualForm({ content: item.manual_content || '' });
                 else if (type === 'contract') setContractForm(item || { client_id: '', project_id: '', title: '', start_date: today, end_date: '', value: '', content: '', status: 'Rascunho' });
+
                 setIsModalOpen(true);
             };
 
-            const addProjectTask = () => { if (newTaskText.trim()) { setCurrentProjectTasks([...currentProjectTasks, { id: Date.now(), text: newTaskText, done: false }]); setNewTaskText(''); } };
-            const toggleProjectTask = (taskId) => { setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)); };
-            const removeProjectTask = (taskId) => { setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId)); };
+            const addProjectTask = () => {
+                if (!newTaskText.trim()) return;
+                setCurrentProjectTasks([...currentProjectTasks, { id: Date.now(), text: newTaskText, done: false }]);
+                setNewTaskText('');
+            };
 
-            // --- RESTAURAÇÃO DO MODELO JURÍDICO ORIGINAL COMPLETO ---
+            const toggleProjectTask = (taskId) => {
+                setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t));
+            };
+
+            const removeProjectTask = (taskId) => {
+                setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId));
+            };
+
+            const generateManualTemplate = () => {
+                if (!editingItem) return;
+                const template = `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}
+
+1. INTRODUÇÃO
+Este sistema foi desenvolvido para facilitar a gestão de sua empresa...
+
+2. ACESSO
+Para acessar, utilize sua URL e credenciais fornecidas...
+
+3. FUNCIONALIDADES
+- Cadastro de Itens
+- Relatórios
+- Monitoramento em tempo real
+
+4. SUPORTE
+Para suporte, entre em contato via WhatsApp ou E-mail.`;
+                setManualForm({ content: template });
+                showToast('Template de manual gerado!', 'success');
+            };
+            
             const generateLegalContract = () => {
                 const client = clients.find(c => c.id == contractForm.client_id);
                 const project = projects.find(p => p.id == contractForm.project_id);
+                
                 if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
+                
                 const value = parseFloat(contractForm.value || project.value || 0);
                 const fineValue = formatCurrency(value * 20);
+                
                 const startDateStr = formatDateDisplay(contractForm.start_date);
                 const endDateStr = contractForm.end_date ? formatDateDisplay(contractForm.end_date) : 'indeterminado';
 
@@ -364,42 +472,73 @@ E, por estarem assim justos e contratados, geram este instrumento eletronicament
 Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
 `;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
-                showToast('Minuta Jurídica gerada!', 'success');
+                showToast('Minuta Jurídica gerada com sucesso!', 'success');
             };
 
             const saveItem = async (e) => {
                 e.preventDefault();
                 try {
                     if (modalType === 'project') {
-                        const newItem = { ...projectForm, value: parseFloat(projectForm.value), tasks: currentProjectTasks };
-                        if (editingItem) { await updateDoc(doc(db, "projects", editingItem.id), newItem); setProjects(projects.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i)); }
-                        else { const docRef = await addDoc(collection(db, "projects"), newItem); setProjects([...projects, {id: docRef.id, ...newItem}]); }
+                        const newItem = { ...projectForm, value: parseFloat(projectForm.value), client_id: String(projectForm.client_id), tasks: currentProjectTasks };
+                        if (editingItem) {
+                            await updateDoc(doc(db, "projects", editingItem.id), newItem);
+                            setProjects(projects.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
+                        } else {
+                            const docRef = await addDoc(collection(db, "projects"), newItem);
+                            setProjects([...projects, {id: docRef.id, ...newItem}]);
+                        }
                     } else if (modalType === 'client') {
-                        if (editingItem) { await updateDoc(doc(db, "clients", editingItem.id), clientForm); setClients(clients.map(i => i.id === editingItem.id ? {id: editingItem.id, ...clientForm} : i)); }
-                        else { const docRef = await addDoc(collection(db, "clients"), clientForm); setClients([...clients, {id: docRef.id, ...clientForm}]); }
+                        const newItem = { ...clientForm };
+                        if (editingItem) {
+                            await updateDoc(doc(db, "clients", editingItem.id), newItem);
+                            setClients(clients.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
+                        } else {
+                            const docRef = await addDoc(collection(db, "clients"), newItem);
+                            setClients([...clients, {id: docRef.id, ...newItem}]);
+                        }
                     } else if (modalType === 'finance') {
                         const newItem = { ...financeForm, value: parseFloat(financeForm.value) };
-                        if (editingItem) { await updateDoc(doc(db, "financial", editingItem.id), newItem); setFinancial(financial.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i)); }
-                        else { const docRef = await addDoc(collection(db, "financial"), newItem); setFinancial([...financial, {id: docRef.id, ...newItem}]); }
+                        if (editingItem) {
+                            await updateDoc(doc(db, "financial", editingItem.id), newItem);
+                            setFinancial(financial.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
+                        } else {
+                            const docRef = await addDoc(collection(db, "financial"), newItem);
+                            setFinancial([...financial, {id: docRef.id, ...newItem}]);
+                        }
                     } else if (modalType === 'hosting') {
-                        await updateDoc(doc(db, "projects", editingItem.id), hostingForm);
-                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...hostingForm } : i));
+                        const newItem = { ...hostingForm };
+                        await updateDoc(doc(db, "projects", editingItem.id), newItem);
+                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...newItem } : i));
                     } else if (modalType === 'manual') {
-                        await updateDoc(doc(db, "projects", editingItem.id), { manual_content: manualForm.content });
-                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, manual_content: manualForm.content } : i));
+                        const newItem = { manual_content: manualForm.content };
+                        await updateDoc(doc(db, "projects", editingItem.id), newItem);
+                        setProjects(projects.map(i => i.id === editingItem.id ? { ...i, ...newItem } : i));
                     } else if (modalType === 'contract') {
-                        if (editingItem) { await updateDoc(doc(db, "contracts", editingItem.id), contractForm); setContracts(contracts.map(i => i.id === editingItem.id ? {id: editingItem.id, ...contractForm} : i)); }
-                        else { const docRef = await addDoc(collection(db, "contracts"), contractForm); setContracts([...contracts, {id: docRef.id, ...contractForm}]); }
+                        const newItem = { ...contractForm };
+                        if (editingItem) {
+                            await updateDoc(doc(db, "contracts", editingItem.id), newItem);
+                            setContracts(contracts.map(i => i.id === editingItem.id ? {id: editingItem.id, ...newItem} : i));
+                        } else {
+                            const docRef = await addDoc(collection(db, "contracts"), newItem);
+                            setContracts([...contracts, {id: docRef.id, ...newItem}]);
+                        }
                     }
-                    setIsModalOpen(false); showToast('Dados salvos!', 'success');
-                } catch (err) { showToast("Erro ao salvar.", "error"); }
+
+                    setIsModalOpen(false);
+                    showToast('Dados salvos com sucesso!', 'success');
+                } catch (err) {
+                    console.error("Erro ao salvar:", err);
+                    showToast("Erro ao salvar no banco de dados.", "error");
+                }
             };
 
             const stats = useMemo(() => {
-                const totalIncome = financial.filter(f => f.type === 'Receita').reduce((a, b) => a + (b.value || 0), 0);
-                const totalExpense = financial.filter(f => f.type === 'Despesa').reduce((a, b) => a + (b.value || 0), 0);
+                const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
+                const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
                 const activeProjects = projects.filter(p => ['Desenvolvimento', 'Briefing', 'Design'].includes(p.status)).length;
-                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects };
+                const pipelineValue = projects.filter(p => ['Desenvolvimento', 'Briefing'].includes(p.status)).reduce((a,b) => a + (b.value || 0), 0);
+                const supportClients = projects.filter(p => p.status === 'Suporte').length;
+                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
             }, [financial, projects]);
 
             const menuItems = [
@@ -430,37 +569,64 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                 <div className="flex h-screen overflow-hidden text-slate-700 font-sans">
                     <Toast {...toast} onClose={() => setToast({...toast, show: false})} />
                     
-                    <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-slate-300 flex flex-col md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl border-r border-slate-800 transition-transform duration-300`}>
+                    {/* SIDEBAR */}
+                    <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl border-r border-slate-800`}>
                         <div className="p-8 border-b border-slate-800">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold"><i className="ph-fill ph-code text-2xl"></i></div>
-                                <div><h1 className="text-lg font-bold text-white">SOFTGESTÃO</h1><p className="text-[10px] uppercase text-indigo-400">Admin Panel</p></div>
+                                <div>
+                                    <h1 className="text-lg font-bold text-white tracking-tight">SOFTGESTÃO</h1>
+                                    <p className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold">Admin Panel</p>
+                                </div>
                             </div>
                         </div>
                         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+                            <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Principal</p>
                             {menuItems.map(item => (
                                 <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                                    <Icon name={item.icon} size={20} weight={activeTab === item.id ? 'fill' : 'regular'} />{item.label}
+                                    <Icon name={item.icon} size={20} weight={activeTab === item.id ? 'fill' : 'regular'} />
+                                    {item.label}
                                 </button>
                             ))}
                         </nav>
                         <div className="p-4 bg-slate-800/50 m-4 rounded-xl border border-slate-700">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-900/50 rounded-full flex items-center justify-center font-bold text-indigo-300">{userData.name.charAt(0)}</div>
-                                <div className="flex-1 min-w-0"><p className="text-sm font-bold text-white truncate">{userData.name}</p><p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Nuvem Ativa</p></div>
+                                <div className="w-10 h-10 bg-indigo-900/50 rounded-full flex items-center justify-center font-bold text-indigo-300 text-sm border border-indigo-500/30">{userData.name.charAt(0)}</div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-white truncate">{userData.name}</p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Online • Nuvem</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </aside>
 
+                    {/* MAIN CONTENT */}
                     <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 sticky top-0">
                             <div className="flex items-center gap-4 flex-1">
                                 <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg"><Icon name="list" size={24} /></button>
-                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
+                                </div>
+                                {['projects', 'clients', 'contracts', 'finance', 'deploy', 'monitoring'].includes(activeTab) && (
+                                    <div className="hidden md:flex flex-1 max-w-md ml-8 relative">
+                                        <span className="absolute left-3 top-2.5 text-slate-400"><Icon name="magnifying-glass" weight="bold"/></span>
+                                        <input 
+                                            type="text" 
+                                            className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-xl text-sm font-semibold focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400" 
+                                            placeholder={`Buscar em ${menuItems.find(i => i.id === activeTab)?.label}...`}
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-4">
-                                <button onClick={() => openModal('project')} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-900/10">
+                                <button onClick={() => openModal('project')} className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-900/10">
                                     <Icon name="plus-circle" weight="fill"/> NOVO PROJETO
                                 </button>
                             </div>
@@ -471,26 +637,143 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                             {activeTab === 'dashboard' && (
                                 <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                        <Card className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none card-hover relative overflow-hidden"><Icon name="code" size={120} className="absolute -right-6 -bottom-6 text-white/10" weight="fill"/><p className="text-xs text-indigo-100 uppercase font-bold tracking-wider mb-2 opacity-80">Projetos Ativos</p><h3 className="text-4xl font-black">{stats.activeProjects}</h3></Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Receita Total</p><h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.totalIncome)}</h3></div><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="trend-up" weight="fill" size={24}/></div></div></Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Despesa Total</p><h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.totalExpense)}</h3></div><div className="p-3 bg-rose-50 text-rose-600 rounded-xl"><Icon name="trend-down" weight="fill" size={24}/></div></div></Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Saldo em Caixa</p><h3 className={`text-3xl font-black ${stats.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3></div><div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Icon name="wallet" weight="fill" size={24}/></div></div></Card>
+                                        <Card className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none card-hover relative overflow-hidden">
+                                            <Icon name="code" size={120} className="absolute -right-6 -bottom-6 text-white/10" weight="fill"/>
+                                            <p className="text-xs text-indigo-100 uppercase font-bold tracking-wider mb-2 opacity-80">Projetos em Andamento</p>
+                                            <h3 className="text-4xl font-black">{stats.activeProjects}</h3>
+                                            <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded text-white font-bold">Produção Ativa</p>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Pipeline de Vendas</p>
+                                                    <h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.pipelineValue)}</h3>
+                                                </div>
+                                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Icon name="trend-up" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Caixa do Mês</p>
+                                                    <h3 className={`text-3xl font-black ${stats.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3>
+                                                </div>
+                                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="wallet" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Clientes em Suporte</p>
+                                                    <h3 className="text-3xl font-black text-slate-800">{stats.supportClients}</h3>
+                                                </div>
+                                                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><Icon name="headset" weight="fill" size={24}/></div>
+                                            </div>
+                                        </Card>
                                     </div>
-                                    <Card className="p-8 card-hover"><h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="chart-bar" className="text-indigo-600"/> Performance Financeira</h3><div className="h-64"><canvas ref={chartRef}></canvas></div></Card>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        <div className="col-span-2 space-y-8">
+                                            <Card className="p-8 card-hover">
+                                                <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="chart-bar" className="text-indigo-600"/> Performance Financeira (Últimos 6 Meses)</h3>
+                                                <div className="h-64">
+                                                    <canvas ref={chartRef}></canvas>
+                                                </div>
+                                            </Card>
+
+                                            <Card className="p-8 card-hover">
+                                                <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="kanban" className="text-indigo-600"/> Acompanhamento de Projetos</h3>
+                                                <div className="space-y-4">
+                                                    {projects.filter(p => p.status !== 'Entregue').length === 0 ? (
+                                                        <p className="text-slate-400 text-sm italic py-4">Nenhum projeto ativo no momento.</p>
+                                                    ) : projects.filter(p => p.status !== 'Entregue').map(p => (
+                                                        <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-colors group cursor-pointer hover:bg-indigo-50" onClick={() => openModal('project', p)}>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-2 h-12 rounded-full ${getStatusColor(p.status).split(' ')[0].replace('bg-', 'bg-')}`}></div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-slate-800">{p.title}</h4>
+                                                                    <p className="text-xs text-slate-500 font-medium">{clients.find(c => c.id === p.client_id)?.company || 'Cliente não vinculado'} • {p.type}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right flex items-center gap-4">
+                                                                <div className="text-right hidden sm:block">
+                                                                    <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(p.status)}`}>{p.status}</span>
+                                                                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Entrega: {formatDateDisplay(p.deadline)}</p>
+                                                                </div>
+                                                                <div className="p-2 text-slate-300 group-hover:text-indigo-600 transition-colors"><Icon name="pencil-simple" weight="bold" /></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Card>
+                                        </div>
+
+                                        <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
+                                            <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas e Avisos</h3>
+                                            <div className="space-y-4">
+                                                {projects.filter(p => {
+                                                    const deadlineDate = new Date(p.deadline + 'T00:00:00');
+                                                    return deadlineDate < new Date() && p.status !== 'Entregue';
+                                                }).map(p => (
+                                                    <div key={`delay-${p.id}`} onClick={() => openModal('project', p)} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-rose-500/20 transition-colors">
+                                                        <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-rose-400">Prazo Excedido</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O projeto <strong>{p.title}</strong> deveria ter sido entregue em {formatDateDisplay(p.deadline)}.</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {projects.filter(p => p.expiration_date && (Math.ceil((new Date(p.expiration_date + 'T00:00:00') - new Date()) / (1000 * 60 * 60 * 24)) <= 30)).map(p => (
+                                                    <div key={`exp-${p.id}`} onClick={() => openModal('hosting', p)} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-orange-500/20 transition-colors">
+                                                        <Icon name="clock-countdown" className="text-orange-400 mt-1" weight="fill"/>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-orange-400">Renovação Próxima</p>
+                                                            <p className="text-xs text-slate-400 mt-1">O site <strong>{p.title}</strong> vence em {formatDateDisplay(p.expiration_date)}.</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Card>
+                                    </div>
                                 </div>
                             )}
 
                             {/* MONITORAMENTO */}
                             {activeTab === 'monitoring' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-end gap-4"><div><h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2><p className="text-sm text-slate-500">Verificação de sites ativos.</p></div><button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg"><Icon name="arrows-clockwise" weight="bold"/> Verificar Agora</button></div>
+                                    <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2>
+                                            <p className="text-sm text-slate-500 mt-1">Verificação de disponibilidade dos sites ativos.</p>
+                                        </div>
+                                        <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
+                                            <Icon name="arrows-clockwise" weight="bold"/> Verificar Novamente
+                                        </button>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                         {projects.filter(p => p.hosting_url).map(p => {
+                                            const isChecked = dailyChecks[p.id];
                                             const status = projectStatus[p.id] || 'checking';
                                             return (
-                                                <Card key={p.id} className={`p-5 group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : 'bg-white hover:border-indigo-300'}`}>
-                                                    <div className="flex justify-between items-start mb-3"><div className="flex items-center gap-2">{status === 'checking' ? <Icon name="spinner" className="animate-spin text-blue-500" /> : <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${status === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{status}</div>}</div><button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${dailyChecks[p.id] ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button></div>
-                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3><p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p><a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all">ABRIR SITE</a>
+                                                <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
+                                                    <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'checking' ? 'bg-blue-500 animate-pulse' : (status === 'online' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {status === 'checking' && <Icon name="spinner" className="animate-spin text-blue-500" weight="bold" />}
+                                                            {status === 'online' && <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Online</div>}
+                                                            {status === 'offline' && <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Offline</div>}
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="pencil-simple" weight="bold" size={16}/></button>
+                                                            <button onClick={() => openModal('hosting', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="globe" weight="bold" size={16}/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash" weight="bold" size={16}/></button>
+                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3>
+                                                    <p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">ABRIR SITE</a>
                                                 </Card>
                                             );
                                         })}
@@ -501,8 +784,36 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                             {/* CLIENTES */}
                             {activeTab === 'clients' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div><h2 className="text-xl font-bold">Clientes Cadastrados</h2></div><button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Novo Cliente</button></div>
-                                    <Card className="overflow-hidden"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider"><tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{clients.map(c => (<tr key={c.id} className="hover:bg-slate-50 text-sm font-semibold"><td className="p-5">{c.company}</td><td className="p-5">{c.email}</td><td className="p-5 flex justify-center gap-2"><button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button></td></tr>))}</tbody></table></Card>
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2>
+                                            <p className="text-sm text-slate-500">Empresas e parceiros cadastrados.</p>
+                                        </div>
+                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button>
+                                    </div>
+                                    <Card className="overflow-hidden">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                                <tr>
+                                                    <th className="p-5">Empresa</th>
+                                                    <th className="p-5">Contato</th>
+                                                    <th className="p-5 text-center">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {clients.filter(c => c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold">
+                                                        <td className="p-5">{c.company}</td>
+                                                        <td className="p-5">{c.email}</td>
+                                                        <td className="p-5 flex justify-center gap-2">
+                                                            <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </Card>
                                 </div>
                             )}
 
@@ -510,127 +821,210 @@ Data de Geração: ${new Date().toLocaleDateString('pt-BR')}
                             {activeTab === 'projects' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {projects.map(p => (
+                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                                             <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500">
-                                                <div className="p-6"><div className="flex justify-between items-start mb-4"><span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button></div></div><h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3><p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p><div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold"><div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div><div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDateDisplay(p.deadline)}</span></div></div></div>
+                                                <div className="p-6">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
+                                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
+                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
+                                                    <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
+                                                    <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
+                                                        <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
+                                                        <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
+                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDateDisplay(p.deadline)}</span></div>
+                                                    </div>
+                                                </div>
                                             </Card>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {/* RELATÓRIOS (RESTAURAÇÃO COMPLETA) */}
-                            {activeTab === 'reports' && (
-                                <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex flex-col"><h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2><p className="text-sm text-slate-500">Exportação em Microsoft Word.</p></div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-indigo-500" onClick={() => {
-                                            const tableRows = projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c => c.id === p.client_id)?.company || 'N/A'}</td><td>${p.status}</td><td>${formatCurrency(p.value)}</td><td>${formatDateDisplay(p.deadline)}</td></tr>`).join('');
-                                            const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório</title><style>body { font-family: 'Arial', sans-serif; } h1 { color: #4338ca; text-align: center; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }</style></head><body><h1>RELATÓRIO DE PROJETOS</h1><table><thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio_projetos.doc'; a.click();
-                                        }}><div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl w-fit mb-4"><Icon name="file-doc" size={28} weight="duotone" /></div><h3 className="font-bold text-slate-800">Projetos Ativos</h3></Card>
-                                        
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-emerald-500" onClick={() => {
-                                            const tableRows = financial.map(f => `<tr><td>${formatDateDisplay(f.date)}</td><td>${f.type}</td><td>${f.description}</td><td>${formatCurrency(f.value)}</td></tr>`).join('');
-                                            const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body><h1>RELATÓRIO FINANCEIRO</h1><table border="1"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='financeiro.doc'; a.click();
-                                        }}><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl w-fit mb-4"><Icon name="bank" size={28} weight="duotone" /></div><h3 className="font-bold text-slate-800">Fluxo de Caixa</h3></Card>
-
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-blue-500" onClick={() => {
-                                            const tableRows = clients.map(c => `<tr><td>${c.company}</td><td>${c.email}</td><td>${c.phone}</td></tr>`).join('');
-                                            const content = `<html><head><meta charset='utf-8'></head><body><h1>CARTEIRA DE CLIENTES</h1><table border="1"><thead><tr><th>Empresa</th><th>Email</th><th>Telefone</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes.doc'; a.click();
-                                        }}><div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4"><Icon name="users" size={28} weight="duotone" /></div><h3 className="font-bold text-slate-800">Clientes</h3></Card>
-
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-rose-500" onClick={() => {
-                                            const tableRows = projects.filter(p => p.hosting_url).map(p => `<tr><td>${p.title}</td><td>${p.hosting_url}</td><td>${formatDateDisplay(p.expiration_date)}</td></tr>`).join('');
-                                            const content = `<html><head><meta charset='utf-8'></head><body><h1>DOMÍNIOS E HOSPEDAGENS</h1><table border="1"><thead><tr><th>Sistema</th><th>URL</th><th>Expiração</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hospedagens.doc'; a.click();
-                                        }}><div className="p-3 bg-rose-50 text-rose-600 rounded-xl w-fit mb-4"><Icon name="globe" size={28} weight="duotone" /></div><h3 className="font-bold text-slate-800">Hospedagens</h3></Card>
-                                    </div>
-                                </div>
-                            )}
-
+                            {/* CONFIGURAÇÕES */}
                             {activeTab === 'config' && (
                                 <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
                                     <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
                                         <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
                                         <form onSubmit={handleSaveConfig} className="space-y-5">
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome Empresa" />
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
-                                            <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
-                                            <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs">Atualizar Cadastro</button>
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
+                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
+                                            <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold text-slate-700" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
+                                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 text-xs">Atualizar Cadastro</button>
                                         </form>
                                     </Card>
                                 </div>
                             )}
+
                         </div>
                     </main>
 
-                    {/* MODAL UNIVERSAL COM CAMPOS ORIGINAIS INTEGRADOS */}
+                    {/* MODAL UNIVERSAL */}
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-                            <div className={`bg-white rounded-3xl shadow-2xl w-full ${['manual', 'contract'].includes(modalType) ? 'max-w-4xl' : 'max-w-lg'} flex flex-col max-h-[90vh]`}>
-                                <div className="bg-slate-50 p-6 flex justify-between items-center border-b"><h3 className="font-bold text-lg flex items-center gap-2 uppercase tracking-tighter">{modalType}</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button></div>
+                            <div className={`bg-white rounded-3xl shadow-2xl w-full ${['manual', 'contract'].includes(modalType) ? 'max-w-4xl' : 'max-w-lg'} border border-slate-200 flex flex-col max-h-[90vh]`}>
+                                <div className="bg-slate-50 p-6 flex-none flex justify-between items-center border-b border-slate-100">
+                                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                        {modalType === 'project' && <><Icon name="laptop" className="text-indigo-600"/> Dados do Projeto</>}
+                                        {modalType === 'client' && <><Icon name="briefcase" className="text-indigo-600"/> Ficha do Cliente</>}
+                                        {modalType === 'finance' && <><Icon name="currency-dollar" className="text-indigo-600"/> Lançamento</>}
+                                        {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Hospedagem</>}
+                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual do Usuário</>}
+                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato Jurídico</>}
+                                    </h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors"><Icon name="x" weight="bold" size={20}/></button>
+                                </div>
+
                                 <form onSubmit={saveItem} className="flex flex-col flex-1 min-h-0">
                                     <div className="p-8 space-y-6 overflow-y-auto flex-1">
-                                        
-                                        {/* NOVO PROJETO (Campos Tipo e Valor em Grid) */}
                                         {modalType === 'project' && (
                                             <>
-                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Cliente</label><select required className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}><option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option></select></div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}>
+                                                            <option value="">Selecione...</option>
+                                                            {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
+                                                            <option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
-                                                <div className="pt-4 border-t">
-                                                    <label className="text-xs font-bold uppercase text-slate-400 block mb-3">Checklist</label>
-                                                    <div className="flex gap-2 mb-4"><input type="text" className="flex-1 p-3 border rounded-xl" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} /><button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus"/></button></div>
-                                                    <div className="space-y-2 max-h-40 overflow-y-auto">{currentProjectTasks.map(task => (<div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded border flex items-center justify-center ${task.done ? 'bg-emerald-500 text-white' : 'bg-white'}`}>{task.done && <Icon name="check" size={12}/>}</button><span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span><button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" /></button></div>))}</div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                
+                                                <div className="pt-4 border-t border-slate-100">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-3">Checklist de Tarefas</label>
+                                                    <div className="flex gap-2 mb-4">
+                                                        <input type="text" className="flex-1 p-3 border border-slate-200 rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
+                                                        <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus" weight="bold"/></button>
+                                                    </div>
+                                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                                        {currentProjectTasks.map(task => (
+                                                            <div key={task.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl group hover:bg-white border border-transparent hover:border-slate-100">
+                                                                <button type="button" onClick={() => toggleProjectTask(task.id)} className={`w-5 h-5 rounded-md border flex items-center justify-center ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300'}`}>
+                                                                    {task.done && <Icon name="check" size={12} weight="bold"/>}
+                                                                </button>
+                                                                <span className={`flex-1 text-sm ${task.done ? 'text-slate-400 line-through' : ''}`}>{task.text}</span>
+                                                                <button type="button" onClick={() => removeProjectTask(task.id)} className="text-slate-300 hover:text-rose-500 group-hover:opacity-100 opacity-0 transition-all"><Icon name="trash" weight="bold"/></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </>
                                         )}
-                                        
-                                        {/* FINANCEIRO (Tipo e Data em Grid no topo) */}
+
+                                        {modalType === 'client' && (
+                                            <>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">CNPJ / CPF</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Telefone</label><input className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
+                                                </div>
+                                            </>
+                                        )}
+
                                         {modalType === 'finance' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Valor</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
                                             </>
                                         )}
 
-                                        {/* CONTRATOS (Campos Início, Fim e Valor em Grid) */}
+                                        {modalType === 'hosting' && (
+                                            <>
+                                                <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">URL / Domínio</label><input className="w-full p-3 border border-slate-200 rounded-xl font-mono text-indigo-600" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Entrega</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.deploy_date} onChange={e => setHostingForm({...hostingForm, deploy_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {modalType === 'manual' && (
+                                            <>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Conteúdo do Manual</label>
+                                                    <button type="button" onClick={generateManualTemplate} className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Template com IA</button>
+                                                </div>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-sm text-slate-700 outline-none focus:border-indigo-500 h-96 resize-none leading-relaxed" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})} placeholder="Escreva as instruções de uso aqui..."></textarea>
+                                            </>
+                                        )}
+
                                         {modalType === 'contract' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Cliente</label><select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Projeto</label><select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}><option value="">Selecione...</option>{projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Cliente</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}>
+                                                            <option value="">Selecione o Cliente...</option>
+                                                            {clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Projeto Relacionado</label>
+                                                        <select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}>
+                                                            <option value="">Selecione o Projeto...</option>
+                                                            {projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                                 <div className="grid grid-cols-3 gap-4">
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Data Início</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Data Fim</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
-                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Valor (R$)</label><input type="number" className="w-full p-3 border rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Início</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Data Fim</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-1">Valor (R$)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
                                                 </div>
-                                                <div className="flex justify-between items-center mb-2 mt-4"><label className="text-xs font-bold uppercase text-slate-400">Minuta Jurídica</label><button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest">Gerar Minuta</button></div>
-                                                <textarea className="w-full p-4 border rounded-xl font-mono text-xs h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})}></textarea>
+                                                <div className="flex justify-between items-center mb-2 mt-4">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Minuta Jurídica</label>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-indigo-700 transition-all"><Icon name="magic-wand" weight="bold"/> Gerar Minuta Jurídica</button>
+                                                        {editingItem && (
+                                                            <button type="button" onClick={() => {
+                                                                const content = `
+                                                                    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                                                                    <head><meta charset='utf-8'><title>Contrato Jurídico</title>
+                                                                    <style>
+                                                                        body { font-family: 'Arial', sans-serif; padding: 50pt; text-align: justify; line-height: 1.6; }
+                                                                        .document { white-space: pre-wrap; font-size: 11pt; }
+                                                                    </style>
+                                                                    </head>
+                                                                    <body>
+                                                                        <div class="document">${contractForm.content}</div>
+                                                                    </body></html>`;
+                                                                const blob = new Blob([content], {type: 'application/msword'});
+                                                                const url = URL.createObjectURL(blob);
+                                                                const a = document.createElement('a'); a.href=url; a.download=`Contrato_${editingItem.title}.doc`; a.click();
+                                                            }} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-emerald-700 transition-all"><Icon name="download-simple" weight="bold"/> Baixar DOC</button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none focus:border-indigo-500 h-80 resize-none leading-relaxed" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})} placeholder="Clique em 'Gerar Minuta' ou escreva o texto do contrato aqui..."></textarea>
                                             </>
                                         )}
-
-                                        {modalType === 'hosting' && (<><div><label className="text-xs font-bold uppercase text-slate-400">URL</label><input className="w-full p-3 border rounded-xl" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} /></div><div><label className="text-xs font-bold uppercase text-slate-400">Vencimento</label><input type="date" className="w-full p-3 border rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div></>)}
-                                        {modalType === 'client' && (<><div><label className="text-xs font-bold uppercase text-slate-400">Empresa</label><input required className="w-full p-3 border rounded-xl font-bold" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div><div><label className="text-xs font-bold uppercase text-slate-400">CNPJ</label><input className="w-full p-3 border rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div></>) }
-                                        {modalType === 'manual' && (<><textarea className="w-full p-4 border rounded-xl font-mono text-sm h-96" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})}></textarea></>)}
                                     </div>
-                                    <div className="p-6 border-t bg-white flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase">Cancelar</button><button type="submit" className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg text-xs uppercase flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button></div>
+
+                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase tracking-wider transition-all">Cancelar</button>
+                                        <button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-xs uppercase tracking-wider transition-all flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar Dados</button>
+                                    </div>
                                 </form>
                             </div>
                         </div>
