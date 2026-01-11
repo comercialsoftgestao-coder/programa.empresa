@@ -33,7 +33,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; user-select: none; }
         
-        /* Padrão Tech no Fundo */
         .bg-pattern-tech {
             background-color: #f1f5f9;
             background-image: linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px);
@@ -51,7 +50,6 @@
         .card-hover { transition: all 0.3s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.15); }
 
-        /* Estilos de Impressão */
         .print-area { font-family: 'Inter', sans-serif; line-height: 1.6; }
         .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
         .print-table th, .print-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
@@ -65,64 +63,28 @@
         }
     </style>
 
-    <!-- Implementação PWA via Blobs -->
     <script>
         (function() {
             const manifest = {
                 name: "SOFTGESTÃO - Admin",
                 short_name: "SoftGestão",
-                description: "Sistema Administrativo SoftGestão",
-                start_url: ".",
                 display: "standalone",
-                orientation: "portrait",
+                start_url: ".",
                 background_color: "#f8fafc",
                 theme_color: "#4f46e5",
-                icons: [
-                    {
-                        src: "https://cdn-icons-png.flaticon.com/512/606/606548.png",
-                        sizes: "512x512",
-                        type: "image/png",
-                        purpose: "any maskable"
-                    }
-                ]
+                icons: [{ src: "https://cdn-icons-png.flaticon.com/512/606/606548.png", sizes: "512x512", type: "image/png" }]
             };
-
             const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            const manifestURL = URL.createObjectURL(manifestBlob);
             const manifestLink = document.createElement('link');
             manifestLink.rel = 'manifest';
-            manifestLink.href = manifestURL;
+            manifestLink.href = URL.createObjectURL(manifestBlob);
             document.head.appendChild(manifestLink);
 
             if ('serviceWorker' in navigator) {
-                const swCode = `
-                    const CACHE_NAME = 'softgestao-cache-v1';
-                    const ASSETS = [window.location.href];
-
-                    self.addEventListener('install', (event) => {
-                        event.waitUntil(
-                            caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-                        );
-                    });
-
-                    self.addEventListener('fetch', (event) => {
-                        event.respondWith(
-                            caches.match(event.request).then((response) => {
-                                return response || fetch(event.request);
-                            })
-                        );
-                    });
-                `;
-                
-                const swBlob = new Blob([swCode], {type: 'text/javascript'});
-                const swURL = URL.createObjectURL(swBlob);
-                
+                const swCode = `self.addEventListener('fetch', function(event) { event.respondWith(fetch(event.request)); });`;
+                const swDataURI = "data:text/javascript;base64," + btoa(swCode);
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register(swURL).then((reg) => {
-                        console.log('PWA: Service Worker registrado.');
-                    }).catch((err) => {
-                        console.warn('PWA: Erro ao registrar SW:', err);
-                    });
+                    navigator.serviceWorker.register(swDataURI).catch(err => console.log("PWA: Modo offline limitado."));
                 });
             }
         })();
@@ -193,7 +155,6 @@
         function App() {
             const [appState, setAppState] = useState('authenticated'); 
             
-            // DADOS E ESTADOS
             const [userData, setUserData] = useState(() => {
                 const saved = localStorage.getItem('softgestao_userdata');
                 return saved ? JSON.parse(saved) : { name: 'CEO SoftGestão', email: 'contato@softgestao.com.br', cnpj: '00.000.000/0001-00', address: 'Av. Paulista, 1000 - SP' };
@@ -201,12 +162,12 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]);
+            const [contracts, setContracts] = useState([]); 
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState('');
+            const [searchTerm, setSearchTerm] = useState(''); 
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
@@ -222,7 +183,7 @@
                 setDailyChecks(prev => ({ ...prev, [id]: !prev[id] }));
             };
 
-            // FORMS
+            // FORMS ORIGINAIS
             const [projectForm, setProjectForm] = useState({ 
                 title: '', client_id: '', type: 'Website', deadline: '', 
                 description: '', status: 'Briefing', value: '', tech_stack: 'React/Node', 
@@ -254,26 +215,15 @@
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
                     clearTimeout(timeoutId);
                     return 'online';
-                } catch (error) {
-                    return 'offline';
-                }
+                } catch (error) { return 'offline'; }
             };
 
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
-                        const initialStatuses = {};
-                        let needsUpdate = false;
-                        projectsToMonitor.forEach(p => {
-                            if (!projectStatus[p.id]) {
-                                initialStatuses[p.id] = 'checking';
-                                needsUpdate = true;
-                            }
-                        });
-                        if (needsUpdate) setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
                         projectsToMonitor.forEach(async (p) => {
-                            if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
+                            if (!projectStatus[p.id]) {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
                                 if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
@@ -286,95 +236,56 @@
 
             const forceRecheckAll = () => {
                 setProjectStatus({});
-                const projectsToMonitor = projects.filter(p => p.hosting_url);
-                const checkingState = {};
-                projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
-                setProjectStatus(checkingState);
-                projectsToMonitor.forEach(async (p) => {
+                projects.filter(p => p.hosting_url).forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
-                    if (status === 'online') setDailyChecks(prev => ({...prev, [p.id]: true}));
                 });
-                showToast('Iniciando verificação completa...', 'info');
+                showToast('Verificando sites...', 'info');
             };
 
             useEffect(() => {
-                if (appState === 'authenticated') {
-                    const fetchAllData = async () => {
-                        setLoading(true);
-                        try {
-                            const projectsSnap = await getDocs(collection(db, "projects"));
-                            setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
-                            const clientsSnap = await getDocs(collection(db, "clients"));
-                            setClients(clientsSnap.docs.map(d => ({id: d.id, ...d.data()})));
-                            const financeSnap = await getDocs(collection(db, "financial"));
-                            setFinancial(financeSnap.docs.map(d => ({id: d.id, ...d.data()})));
-                            const contractsSnap = await getDocs(collection(db, "contracts"));
-                            setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
-                        } catch (err) {
-                            showToast("Erro ao conectar com o banco de dados.", "error");
-                        } finally {
-                            setLoading(false);
-                        }
-                    };
-                    fetchAllData();
-                }
-            }, [appState]);
+                const fetchAllData = async () => {
+                    setLoading(true);
+                    try {
+                        const projectsSnap = await getDocs(collection(db, "projects"));
+                        setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+                        const clientsSnap = await getDocs(collection(db, "clients"));
+                        setClients(clientsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+                        const financeSnap = await getDocs(collection(db, "financial"));
+                        setFinancial(financeSnap.docs.map(d => ({id: d.id, ...d.data()})));
+                        const contractsSnap = await getDocs(collection(db, "contracts"));
+                        setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+                    } catch (err) { console.error(err); } finally { setLoading(false); }
+                };
+                fetchAllData();
+            }, []);
 
             useEffect(() => {
-                if (!loading && appState === 'authenticated') {
-                    localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
-                }
-            }, [userData, loading, appState]);
+                if (!loading) localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
+            }, [userData, loading]);
 
             useEffect(() => {
                 if (activeTab === 'dashboard' && chartRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
                     const ctx = chartRef.current.getContext('2d');
-                    const last6Months = Array.from({length: 6}, (_, i) => {
-                        const d = new Date();
-                        d.setMonth(d.getMonth() - i);
-                        return d;
-                    }).reverse();
+                    const last6Months = Array.from({length: 6}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - i); return d; }).reverse();
                     const labels = last6Months.map(d => d.toLocaleString('pt-BR', { month: 'short' }));
                     const incomeData = last6Months.map(date => financial.filter(f => f.type === 'Receita' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear()).reduce((acc, curr) => acc + (curr.value || 0), 0));
                     const expenseData = last6Months.map(date => financial.filter(f => f.type === 'Despesa' && new Date(f.date).getMonth() === date.getMonth() && new Date(f.date).getFullYear() === date.getFullYear()).reduce((acc, curr) => acc + (curr.value || 0), 0));
-
-                    chartInstance.current = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: labels,
-                            datasets: [
-                                { label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 },
-                                { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
-                            scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' } } }
-                        }
-                    });
+                    chartInstance.current = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: 'Receitas', data: incomeData, backgroundColor: '#10b981', borderRadius: 6 }, { label: 'Despesas', data: expenseData, backgroundColor: '#f43f5e', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false } });
                 }
-                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
             }, [activeTab, financial]);
 
-            const handleSaveConfig = (e) => {
-                e.preventDefault();
-                showToast('Dados corporativos atualizados!', 'success');
-            };
+            const handleSaveConfig = (e) => { e.preventDefault(); showToast('Dados atualizados!', 'success'); };
 
             const deleteItem = async (id, list, setList) => {
-                if(confirm('Tem certeza que deseja excluir este registro?')) {
+                if(confirm('Tem certeza que deseja excluir?')) {
                     try {
                         let col = list === projects ? 'projects' : (list === clients ? 'clients' : (list === financial ? 'financial' : 'contracts'));
                         await deleteDoc(doc(db, col, id));
                         setList(list.filter(i => i.id !== id));
                         showToast('Registro excluído.', 'success');
-                    } catch (e) {
-                        showToast('Erro ao excluir.', 'error');
-                    }
+                    } catch (e) { showToast('Erro ao excluir.', 'error'); }
                 }
             };
 
@@ -394,35 +305,30 @@
                 setIsModalOpen(true);
             };
 
-            const addProjectTask = () => {
-                if (!newTaskText.trim()) return;
-                setCurrentProjectTasks([...currentProjectTasks, { id: Date.now(), text: newTaskText, done: false }]);
-                setNewTaskText('');
-            };
+            const addProjectTask = () => { if (newTaskText.trim()) { setCurrentProjectTasks([...currentProjectTasks, { id: Date.now(), text: newTaskText, done: false }]); setNewTaskText(''); } };
+            const toggleProjectTask = (taskId) => { setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)); };
+            const removeProjectTask = (taskId) => { setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId)); };
 
-            const toggleProjectTask = (taskId) => {
-                setCurrentProjectTasks(currentProjectTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t));
-            };
-
-            const removeProjectTask = (taskId) => {
-                setCurrentProjectTasks(currentProjectTasks.filter(t => t.id !== taskId));
-            };
-
-            const generateManualTemplate = () => {
-                if (!editingItem) return;
-                setManualForm({ content: `MANUAL DE UTILIZAÇÃO - ${editingItem.title.toUpperCase()}\n\n1. INTRODUÇÃO\nEste sistema foi desenvolvido...\n\n2. ACESSO\nUtilize sua URL...\n\n3. FUNCIONALIDADES\n...\n\n4. SUPORTE\n...` });
-                showToast('Template gerado!', 'success');
-            };
-            
             const generateLegalContract = () => {
                 const client = clients.find(c => c.id == contractForm.client_id);
                 const project = projects.find(p => p.id == contractForm.project_id);
-                if (!client || !project) { showToast('Selecione Cliente e Projeto.', 'error'); return; }
+                if (!client || !project) { showToast('Selecione Cliente e Projeto primeiro.', 'error'); return; }
                 const value = parseFloat(contractForm.value || project.value || 0);
                 const fineValue = formatCurrency(value * 20);
-                const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE\n\nCONTRATADA: ${userData.name}\nCONTRATANTE: ${client.company}\n\nOBJETO: ${project.title}\nVALOR: ${formatCurrency(value)}\nMULTA POR REVENDA: ${fineValue}`;
+                const startDateStr = formatDateDisplay(contractForm.start_date);
+                const endDateStr = contractForm.end_date ? formatDateDisplay(contractForm.end_date) : 'indeterminado';
+
+                const template = `CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
+================================================================================
+IDENTIFICAÇÃO DAS PARTES
+CONTRATADA: ${userData.name}, inscrita no CNPJ/CPF sob nº ${userData.cnpj || '00.000.000/0001-00'}, com sede em ${userData.address || 'Endereço da Empresa'}.
+CONTRATANTE: ${client.company}, pessoa jurídica de direito privado, inscrita no CNPJ/CPF nº ${client.cnpj_cpf || '___________'}, representada neste ato na forma de seu contrato social.
+...
+VALOR TOTAL DE ${formatCurrency(value)}.
+MULTA PUNITIVA NO VALOR DE ${fineValue} (VINTE VEZES O VALOR DO CONTRATO)...
+VIGÊNCIA EM ${startDateStr} ATÉ ${endDateStr}...`;
                 setContractForm(prev => ({ ...prev, content: template, title: `Contrato - ${client.company} - ${project.title}` }));
-                showToast('Minuta gerada!', 'success');
+                showToast('Minuta Jurídica gerada!', 'success');
             };
 
             const saveItem = async (e) => {
@@ -449,18 +355,14 @@
                         if (editingItem) { await updateDoc(doc(db, "contracts", editingItem.id), contractForm); setContracts(contracts.map(i => i.id === editingItem.id ? {id: editingItem.id, ...contractForm} : i)); }
                         else { const docRef = await addDoc(collection(db, "contracts"), contractForm); setContracts([...contracts, {id: docRef.id, ...contractForm}]); }
                     }
-                    setIsModalOpen(false);
-                    showToast('Dados salvos!', 'success');
+                    setIsModalOpen(false); showToast('Dados salvos!', 'success');
                 } catch (err) { showToast("Erro ao salvar.", "error"); }
             };
 
             const stats = useMemo(() => {
-                const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
-                const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
-                const activeProjects = projects.filter(p => ['Desenvolvimento', 'Briefing', 'Design'].includes(p.status)).length;
-                const pipelineValue = projects.filter(p => ['Desenvolvimento', 'Briefing'].includes(p.status)).reduce((a,b) => a + (b.value || 0), 0);
-                const supportClients = projects.filter(p => p.status === 'Suporte').length;
-                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
+                const totalIncome = financial.filter(f => f.type === 'Receita').reduce((a, b) => a + (b.value || 0), 0);
+                const totalExpense = financial.filter(f => f.type === 'Despesa').reduce((a, b) => a + (b.value || 0), 0);
+                return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects: projects.filter(p => p.status !== 'Entregue').length };
             }, [financial, projects]);
 
             const menuItems = [
@@ -491,36 +393,25 @@
                 <div className="flex h-screen overflow-hidden text-slate-700 font-sans">
                     <Toast {...toast} onClose={() => setToast({...toast, show: false})} />
                     
-                    <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl border-r border-slate-800`}>
+                    <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-slate-300 flex flex-col md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl border-r border-slate-800 transition-transform duration-300`}>
                         <div className="p-8 border-b border-slate-800">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold"><i className="ph-fill ph-code text-2xl"></i></div>
-                                <div>
-                                    <h1 className="text-lg font-bold text-white tracking-tight">SOFTGESTÃO</h1>
-                                    <p className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold">Admin Panel</p>
-                                </div>
+                                <div><h1 className="text-lg font-bold text-white">SOFTGESTÃO</h1><p className="text-[10px] uppercase text-indigo-400">Admin Panel</p></div>
                             </div>
                         </div>
                         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-                            <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Principal</p>
                             {menuItems.map(item => (
                                 <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                                    <Icon name={item.icon} size={20} weight={activeTab === item.id ? 'fill' : 'regular'} />
-                                    {item.label}
+                                    <Icon name={item.icon} size={20} weight={activeTab === item.id ? 'fill' : 'regular'} />{item.label}
                                 </button>
                             ))}
                         </nav>
                         <div className="p-4 bg-slate-800/50 m-4 rounded-xl border border-slate-700">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-900/50 rounded-full flex items-center justify-center font-bold text-indigo-300 text-sm border border-indigo-500/30">{userData.name.charAt(0)}</div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-white truncate">{userData.name}</p>
-                                    <div className="flex items-center gap-1.5 mt-1">
-                                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Online • Nuvem</p>
-                                    </div>
-                                </div>
+                                <div className="w-10 h-10 bg-indigo-900/50 rounded-full flex items-center justify-center font-bold text-indigo-300">{userData.name.charAt(0)}</div>
+                                <div className="flex-1 min-w-0"><p className="text-sm font-bold text-white truncate">{userData.name}</p><p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Nuvem Ativa</p></div>
                             </div>
                         </div>
                     </aside>
@@ -529,18 +420,10 @@
                         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 sticky top-0">
                             <div className="flex items-center gap-4 flex-1">
                                 <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg"><Icon name="list" size={24} /></button>
-                                <div>
-                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
-                                </div>
-                                {['projects', 'clients', 'contracts', 'finance', 'deploy', 'monitoring'].includes(activeTab) && (
-                                    <div className="hidden md:flex flex-1 max-w-md ml-8 relative">
-                                        <span className="absolute left-3 top-2.5 text-slate-400"><Icon name="magnifying-glass" weight="bold"/></span>
-                                        <input type="text" className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-xl text-sm font-semibold focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400" placeholder={`Buscar...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                                    </div>
-                                )}
+                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
                             </div>
                             <div className="flex items-center gap-4">
-                                <button onClick={() => openModal('project')} className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-900/10">
+                                <button onClick={() => openModal('project')} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-900/10">
                                     <Icon name="plus-circle" weight="fill"/> NOVO PROJETO
                                 </button>
                             </div>
@@ -550,79 +433,25 @@
                             {activeTab === 'dashboard' && (
                                 <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                        <Card className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none card-hover relative overflow-hidden">
-                                            <Icon name="code" size={120} className="absolute -right-6 -bottom-6 text-white/10" weight="fill"/>
-                                            <p className="text-xs text-indigo-100 uppercase font-bold tracking-wider mb-2 opacity-80">Projetos Ativos</p>
-                                            <h3 className="text-4xl font-black">{stats.activeProjects}</h3>
-                                        </Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
-                                            <div className="flex justify-between items-start">
-                                                <div><p className="text-xs text-slate-400 uppercase font-bold mb-2">Pipeline</p><h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.pipelineValue)}</h3></div>
-                                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Icon name="trend-up" weight="fill" size={24}/></div>
-                                            </div>
-                                        </Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
-                                            <div className="flex justify-between items-start">
-                                                <div><p className="text-xs text-slate-400 uppercase font-bold mb-2">Caixa</p><h3 className={`text-3xl font-black ${stats.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3></div>
-                                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="wallet" weight="fill" size={24}/></div>
-                                            </div>
-                                        </Card>
-                                        <Card className="p-6 bg-white border border-slate-200 card-hover">
-                                            <div className="flex justify-between items-start">
-                                                <div><p className="text-xs text-slate-400 uppercase font-bold mb-2">Suporte</p><h3 className="text-3xl font-black text-slate-800">{stats.supportClients}</h3></div>
-                                                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><Icon name="headset" weight="fill" size={24}/></div>
-                                            </div>
-                                        </Card>
+                                        <Card className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none card-hover relative overflow-hidden"><Icon name="code" size={120} className="absolute -right-6 -bottom-6 text-white/10" weight="fill"/><p className="text-xs text-indigo-100 uppercase font-bold tracking-wider mb-2 opacity-80">Projetos Ativos</p><h3 className="text-4xl font-black">{stats.activeProjects}</h3></Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Receita Total</p><h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.totalIncome)}</h3></div><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="trend-up" weight="fill" size={24}/></div></div></Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Despesa Total</p><h3 className="text-3xl font-black text-slate-800">{formatCurrency(stats.totalExpense)}</h3></div><div className="p-3 bg-rose-50 text-rose-600 rounded-xl"><Icon name="trend-down" weight="fill" size={24}/></div></div></Card>
+                                        <Card className="p-6 bg-white border border-slate-200 card-hover"><div className="flex justify-between items-start"><div><p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Saldo em Caixa</p><h3 className={`text-3xl font-black ${stats.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(stats.balance)}</h3></div><div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Icon name="wallet" weight="fill" size={24}/></div></div></Card>
                                     </div>
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                        <div className="col-span-2 space-y-8">
-                                            <Card className="p-8 card-hover"><h3 className="font-bold text-lg mb-6 flex items-center gap-2"><Icon name="chart-bar" className="text-indigo-600"/> Performance Financeira</h3><div className="h-64"><canvas ref={chartRef}></canvas></div></Card>
-                                            <Card className="p-8 card-hover"><h3 className="font-bold text-lg mb-6 flex items-center gap-2"><Icon name="kanban" className="text-indigo-600"/> Acompanhamento</h3><div className="space-y-4">
-                                                {projects.filter(p => p.status !== 'Entregue').map(p => (
-                                                    <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-indigo-50" onClick={() => openModal('project', p)}>
-                                                        <div className="flex items-center gap-4"><div className={`w-2 h-12 rounded-full ${getStatusColor(p.status).split(' ')[0]}`}></div><div><h4 className="font-bold">{p.title}</h4><p className="text-xs text-slate-500">{p.type}</p></div></div>
-                                                        <div className="text-right"><span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase border ${getStatusColor(p.status)}`}>{p.status}</span></div>
-                                                    </div>
-                                                ))}
-                                            </div></Card>
-                                        </div>
-                                        <Card className="p-8 card-hover bg-slate-900 text-slate-300 h-fit">
-                                            <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2"><Icon name="bell" className="text-indigo-400"/> Alertas</h3>
-                                            <div className="space-y-4">
-                                                {projects.filter(p => { const deadlineDate = new Date(p.deadline + 'T00:00:00'); return deadlineDate < new Date() && p.status !== 'Entregue'; }).map(p => (
-                                                    <div key={`delay-${p.id}`} className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
-                                                        <Icon name="warning" className="text-rose-500 mt-1" weight="fill"/><div><p className="text-sm font-bold text-rose-400">Prazo Excedido</p><p className="text-xs">{p.title}</p></div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </Card>
-                                    </div>
+                                    <Card className="p-8 card-hover"><h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Icon name="chart-bar" className="text-indigo-600"/> Performance Financeira</h3><div className="h-64"><canvas ref={chartRef}></canvas></div></Card>
                                 </div>
                             )}
 
                             {activeTab === 'monitoring' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-end">
-                                        <div><h2 className="text-xl font-bold">Monitoramento Diário</h2><p className="text-sm text-slate-500">Verificação de sites ativos.</p></div>
-                                        <button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg"><Icon name="arrows-clockwise" weight="bold"/> Verificar</button>
-                                    </div>
+                                    <div className="flex justify-between items-end gap-4"><div><h2 className="text-xl font-bold text-slate-800">Monitoramento Diário</h2><p className="text-sm text-slate-500">Verificação de sites.</p></div><button onClick={forceRecheckAll} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg"><Icon name="arrows-clockwise" weight="bold"/> Verificar</button></div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                         {projects.filter(p => p.hosting_url).map(p => {
-                                            const isChecked = dailyChecks[p.id];
                                             const status = projectStatus[p.id] || 'checking';
                                             return (
-                                                <Card key={p.id} className={`p-5 transition-all relative overflow-hidden group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : (isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white hover:border-indigo-300')}`}>
-                                                    <div className={`absolute top-0 left-0 right-0 h-1 ${status === 'checking' ? 'bg-blue-500 animate-pulse' : (status === 'online' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <div className="flex items-center gap-2">{status === 'checking' && <Icon name="spinner" className="animate-spin text-blue-500" />}{status === 'online' && <div className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">Online</div>}{status === 'offline' && <div className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold">Offline</div>}</div>
-                                                        <div className="flex gap-1">
-                                                            <button onClick={() => openModal('project', p)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-all"><Icon name="pencil-simple" weight="bold" size={16}/></button>
-                                                            <button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center ${isChecked ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button>
-                                                        </div>
-                                                    </div>
-                                                    <h3 className="font-bold truncate">{p.title}</h3>
-                                                    <p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                    <a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all">ABRIR SITE</a>
+                                                <Card key={p.id} className={`p-5 group ${status === 'offline' ? 'border-red-500 bg-red-50/50' : 'bg-white hover:border-indigo-300'}`}>
+                                                    <div className="flex justify-between items-start mb-3"><div className="flex items-center gap-2">{status === 'checking' ? <Icon name="spinner" className="animate-spin text-blue-500" /> : <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${status === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{status}</div>}</div><button onClick={() => toggleDailyCheck(p.id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${dailyChecks[p.id] ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}><Icon name="check" weight="bold" size={16}/></button></div>
+                                                    <h3 className="font-bold text-slate-800 truncate">{p.title}</h3><p className="text-xs text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p><a href={p.hosting_url} target="_blank" className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all uppercase">Abrir Site</a>
                                                 </Card>
                                             );
                                         })}
@@ -632,44 +461,17 @@
 
                             {activeTab === 'clients' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <div><h2 className="text-xl font-bold">Carteira de Clientes</h2><p className="text-sm text-slate-500">Gestão de empresas.</p></div>
-                                        <button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button>
-                                    </div>
-                                    <Card className="overflow-hidden">
-                                        <table className="w-full text-left">
-                                            <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase"><tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr></thead>
-                                            <tbody className="divide-y divide-slate-100">{clients.filter(c => c.company.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                                                <tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold"><td className="p-5">{c.company}</td><td className="p-5">{c.email}</td><td className="p-5 flex justify-center gap-2">
-                                                    <button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
-                                                    <button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button>
-                                                </td></tr>
-                                            ))}</tbody>
-                                        </table>
-                                    </Card>
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div><h2 className="text-xl font-bold">Clientes</h2></div><button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Novo Cliente</button></div>
+                                    <Card className="overflow-hidden"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider"><tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{clients.map(c => (<tr key={c.id} className="hover:bg-slate-50 text-sm font-semibold"><td className="p-5">{c.company}</td><td className="p-5">{c.email}</td><td className="p-5 flex justify-center gap-2"><button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button></td></tr>))}</tbody></table></Card>
                                 </div>
                             )}
 
                             {activeTab === 'projects' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                                        {projects.map(p => (
                                             <Card key={p.id} className="group overflow-hidden border-t-4 border-t-indigo-500">
-                                                <div className="p-6">
-                                                    <div className="flex justify-between items-start mb-4"><span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span>
-                                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button>
-                                                            <button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button>
-                                                        </div>
-                                                    </div>
-                                                    <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
-                                                    <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                    <div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold">
-                                                        <div className="flex justify-between"><span>Stack</span><span className="text-slate-700">{p.tech_stack}</span></div>
-                                                        <div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div>
-                                                        <div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDateDisplay(p.deadline)}</span></div>
-                                                    </div>
-                                                </div>
+                                                <div className="p-6"><div className="flex justify-between items-start mb-4"><span className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${getStatusColor(p.status)}`}>{p.status}</span><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openModal('project', p)} className="text-slate-400 hover:text-indigo-600"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(p.id, projects, setProjects)} className="text-slate-400 hover:text-rose-600"><Icon name="trash" weight="bold"/></button></div></div><h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3><p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p><div className="space-y-3 pt-4 border-t border-slate-100 text-xs font-bold"><div className="flex justify-between"><span>Valor</span><span className="text-emerald-600">{formatCurrency(p.value)}</span></div><div className="flex justify-between"><span>Prazo</span><span className="text-slate-700">{formatDateDisplay(p.deadline)}</span></div></div></div>
                                             </Card>
                                         ))}
                                     </div>
@@ -679,15 +481,8 @@
                             {activeTab === 'deploy' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {projects.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                                            <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500">
-                                                <h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3>
-                                                <p className="text-sm text-slate-500 font-medium mb-4">{clients.find(c => c.id === p.client_id)?.company}</p>
-                                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                                    <button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button>
-                                                    <button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button>
-                                                </div>
-                                            </Card>
+                                        {projects.map(p => (
+                                            <Card key={p.id} className="p-6 border-t-4 border-t-indigo-500"><h3 className="text-lg font-black text-slate-800 mb-1">{p.title}</h3><p className="text-sm text-slate-500 mb-4">{clients.find(c => c.id === p.client_id)?.company}</p><div className="grid grid-cols-2 gap-3 mt-4"><button onClick={() => openModal('hosting', p)} className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="globe" weight="bold"/> Hospedagem</button><button onClick={() => openModal('manual', p)} className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2"><Icon name="book-bookmark" weight="bold"/> Manual</button></div></Card>
                                         ))}
                                     </div>
                                 </div>
@@ -695,22 +490,10 @@
 
                             {activeTab === 'contracts' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <div><h2 className="text-2xl font-black">Contratos Jurídicos</h2></div>
-                                        <button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 transition-all"><Icon name="plus" weight="bold"/> Novo Contrato</button>
-                                    </div>
+                                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100"><div><h2 className="text-2xl font-black">Contratos</h2></div><button onClick={() => openModal('contract')} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-600 transition-all"><Icon name="plus" weight="bold"/> Novo Contrato</button></div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {contracts.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                                            <Card key={c.id} className="p-6 border-l-4 border-l-indigo-600">
-                                                <div className="flex justify-between items-start mb-4"><div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</div>
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button>
-                                                        <button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg"><Icon name="trash" weight="bold"/></button>
-                                                    </div>
-                                                </div>
-                                                <h3 className="text-lg font-black">{c.title}</h3>
-                                                <p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {formatDateDisplay(c.start_date)}</p>
-                                            </Card>
+                                        {contracts.map(c => (
+                                            <Card key={c.id} className="p-6 border-l-4 border-l-indigo-600"><div className="flex justify-between items-start mb-4"><div className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase text-slate-600 border border-slate-200">{c.status}</div><div className="flex gap-2"><button onClick={() => openModal('contract', c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(c.id, contracts, setContracts)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg"><Icon name="trash" weight="bold"/></button></div></div><h3 className="text-lg font-black">{c.title}</h3><p className="text-xs text-slate-400 font-bold uppercase mt-2">Criado em: {formatDateDisplay(c.start_date)}</p></Card>
                                         ))}
                                     </div>
                                 </div>
@@ -718,85 +501,80 @@
 
                             {activeTab === 'finance' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                                        <div><h2 className="text-xl font-bold">Fluxo de Caixa</h2></div>
-                                        <button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all"><Icon name="plus" weight="bold"/> Novo Lançamento</button>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-4"><h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>{financial.filter(f => f.type === 'Receita').map(f => (
-                                            <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500"><div><p className="font-bold">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div><span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span></Card>
-                                        ))}</div>
-                                        <div className="space-y-4"><h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>{financial.filter(f => f.type === 'Despesa').map(f => (
-                                            <Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500"><div><p className="font-bold">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div><span className="font-bold text-rose-600">{formatCurrency(f.value)}</span></Card>
-                                        ))}</div>
-                                    </div>
+                                    <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div><h2 className="text-xl font-bold">Fluxo de Caixa</h2></div><button onClick={() => openModal('finance')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all"><Icon name="plus" weight="bold"/> Novo Lançamento</button></div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-4"><h3 className="text-sm font-bold text-slate-400 uppercase">Receitas</h3>{financial.filter(f => f.type === 'Receita').map(f => (<Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-emerald-500"><div><p className="font-bold">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div><span className="font-bold text-emerald-600">{formatCurrency(f.value)}</span></Card>))}</div><div className="space-y-4"><h3 className="text-sm font-bold text-slate-400 uppercase">Despesas</h3>{financial.filter(f => f.type === 'Despesa').map(f => (<Card key={f.id} className="p-4 flex items-center justify-between border-l-4 border-l-rose-500"><div><p className="font-bold">{f.description}</p><p className="text-xs text-slate-400">{formatDateDisplay(f.date)}</p></div><span className="font-bold text-rose-600">{formatCurrency(f.value)}</span></Card>))}</div></div>
                                 </div>
                             )}
 
                             {activeTab === 'reports' && (
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                                    <div><h2 className="text-xl font-bold">Relatórios Gerenciais</h2><p className="text-sm text-slate-500">Exportação Microsoft Word.</p></div>
+                                    <div className="flex flex-col"><h2 className="text-xl font-bold text-slate-800">Relatórios Gerenciais</h2><p className="text-sm text-slate-500">Exportação Microsoft Word.</p></div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer border-t-4 border-t-indigo-500" onClick={() => {
-                                            const rows = projects.map(p => `<tr><td>${p.title}</td><td>${p.status}</td><td>${formatCurrency(p.value)}</td></tr>`).join('');
-                                            const content = `<html><body><h1>RELATÓRIO DE PROJETOS</h1><table border="1"><thead><tr><th>Projeto</th><th>Status</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-                                            const blob = new Blob([content], {type: 'application/msword'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a'); a.href=url; a.download='relatorio.doc'; a.click();
-                                        }}>
-                                            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl w-fit mb-4"><Icon name="file-doc" size={28} /></div><h3 className="font-bold">Projetos Ativos</h3>
-                                        </Card>
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-indigo-500" onClick={() => {
+                                            const tableRows = projects.map(p => `<tr><td>${p.title}</td><td>${clients.find(c => c.id === p.client_id)?.company || 'N/A'}</td><td>${p.status}</td><td>${formatCurrency(p.value)}</td><td>${formatDateDisplay(p.deadline)}</td></tr>`).join('');
+                                            const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório</title><style>body { font-family: 'Arial', sans-serif; } h1 { color: #4338ca; text-align: center; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }</style></head><body><h1>RELATÓRIO DE PROJETOS</h1><table><thead><tr><th>Projeto</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Prazo</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio_projetos.doc'; a.click();
+                                        }}><div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl w-fit mb-4"><Icon name="file-doc" size={28} weight="duotone" /></div><h3 className="font-bold">Projetos Ativos</h3></Card>
+                                        
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-emerald-500" onClick={() => {
+                                            const tableRows = financial.map(f => `<tr><td>${formatDateDisplay(f.date)}</td><td>${f.type}</td><td>${f.description}</td><td>${formatCurrency(f.value)}</td></tr>`).join('');
+                                            const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body><h1>RELATÓRIO FINANCEIRO</h1><table border="1"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='financeiro.doc'; a.click();
+                                        }}><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl w-fit mb-4"><Icon name="bank" size={28} weight="duotone" /></div><h3 className="font-bold">Fluxo de Caixa</h3></Card>
+
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-blue-500" onClick={() => {
+                                            const tableRows = clients.map(c => `<tr><td>${c.company}</td><td>${c.email}</td><td>${c.phone}</td></tr>`).join('');
+                                            const content = `<html><head><meta charset='utf-8'></head><body><h1>CARTEIRA DE CLIENTES</h1><table border="1"><thead><tr><th>Empresa</th><th>Email</th><th>Telefone</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes.doc'; a.click();
+                                        }}><div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4"><Icon name="users" size={28} weight="duotone" /></div><h3 className="font-bold">Clientes</h3></Card>
+
+                                        <Card className="p-6 hover:shadow-lg transition-all cursor-pointer group border-t-4 border-t-rose-500" onClick={() => {
+                                            const tableRows = projects.filter(p => p.hosting_url).map(p => `<tr><td>${p.title}</td><td>${p.hosting_url}</td><td>${formatDateDisplay(p.expiration_date)}</td></tr>`).join('');
+                                            const content = `<html><head><meta charset='utf-8'></head><body><h1>HOSPEDAGENS</h1><table border="1"><thead><tr><th>Sistema</th><th>URL</th><th>Expiração</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+                                            const blob = new Blob([content], {type: 'application/msword'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hospedagens.doc'; a.click();
+                                        }}><div className="p-3 bg-rose-50 text-rose-600 rounded-xl w-fit mb-4"><Icon name="globe" size={28} weight="duotone" /></div><h3 className="font-bold">Hospedagens</h3></Card>
                                     </div>
                                 </div>
                             )}
 
                             {activeTab === 'config' && (
                                 <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
-                                    <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600">
-                                        <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3>
-                                        <form onSubmit={handleSaveConfig} className="space-y-5">
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome da Empresa" />
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" />
-                                            <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" />
-                                            <input type="email" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:border-indigo-600 outline-none font-bold" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="E-mail" />
-                                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg text-xs uppercase">Atualizar Cadastro</button>
-                                        </form>
-                                    </Card>
+                                    <Card className="p-8 shadow-lg border-t-8 border-t-indigo-600"><h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-3"><Icon name="user-circle" className="text-indigo-600" weight="fill"/> Dados Corporativos</h3><form onSubmit={handleSaveConfig} className="space-y-5"><input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Nome Empresa" /><input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.cnpj} onChange={e => setUserData({...userData, cnpj: e.target.value})} placeholder="CNPJ" /><input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 font-bold" value={userData.address} onChange={e => setUserData({...userData, address: e.target.value})} placeholder="Endereço" /><button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs">Atualizar Cadastro</button></form></Card>
                                 </div>
                             )}
                         </div>
                     </main>
 
-                    {/* MODAL UNIVERSAL */}
+                    {/* MODAL UNIVERSAL COM CAMPOS ORIGINAIS RESTAURADOS */}
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-                            <div className={`bg-white rounded-3xl shadow-2xl w-full ${['manual', 'contract'].includes(modalType) ? 'max-w-4xl' : 'max-w-lg'} border border-slate-200 flex flex-col max-h-[90vh]`}>
-                                <div className="bg-slate-50 p-6 flex-none flex justify-between items-center border-b border-slate-100">
-                                    <h3 className="font-bold text-lg flex items-center gap-2">
-                                        {modalType === 'project' && <><Icon name="laptop" className="text-indigo-600"/> Projeto</>}
-                                        {modalType === 'client' && <><Icon name="briefcase" className="text-indigo-600"/> Cliente</>}
-                                        {modalType === 'finance' && <><Icon name="currency-dollar" className="text-indigo-600"/> Lançamento</>}
-                                        {modalType === 'hosting' && <><Icon name="globe" className="text-indigo-600"/> Hospedagem</>}
-                                        {modalType === 'manual' && <><Icon name="book-bookmark" className="text-indigo-600"/> Manual</>}
-                                        {modalType === 'contract' && <><Icon name="scroll" className="text-indigo-600"/> Contrato</>}
-                                    </h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button>
-                                </div>
-
+                            <div className={`bg-white rounded-3xl shadow-2xl w-full ${['manual', 'contract'].includes(modalType) ? 'max-w-4xl' : 'max-w-lg'} flex flex-col max-h-[90vh]`}>
+                                <div className="bg-slate-50 p-6 flex justify-between items-center border-b"><h3 className="font-bold text-lg flex items-center gap-2">{modalType.toUpperCase()}</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500"><Icon name="x" weight="bold" size={20}/></button></div>
                                 <form onSubmit={saveItem} className="flex flex-col flex-1 min-h-0">
                                     <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                                        
+                                        {/* RESTAURAÇÃO: FORM NOVO PROJETO ORIGINAL */}
                                         {modalType === 'project' && (
                                             <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Título</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Título</label><input required className="w-full p-3 border rounded-xl" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} /></div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Cliente</label><select required className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Status</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Cliente</label><select required className="w-full p-3 border rounded-xl bg-white" value={projectForm.client_id} onChange={e => setProjectForm({...projectForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
+                                                    <div>
+                                                        <label className="text-xs font-bold uppercase text-slate-400 block mb-1">Tipo</label>
+                                                        <select className="w-full p-3 border rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
+                                                            <option>Website</option><option>Loja Online</option><option>Sistema Web</option><option>App Mobile</option><option>Landing Page</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Status</label><select className="w-full p-3 border rounded-xl bg-white" value={projectForm.status} onChange={e => setProjectForm({...projectForm, status: e.target.value})}><option>Briefing</option><option>Design</option><option>Desenvolvimento</option><option>Homologação</option><option>Entregue</option><option>Suporte</option></select></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Valor</label><input type="number" className="w-full p-3 border rounded-xl" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} /></div>
+                                                </div>
+                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Prazo</label><input type="date" required className="w-full p-3 border rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
                                                 <div className="pt-4 border-t border-slate-100">
-                                                    <label className="text-xs font-bold text-slate-400 uppercase block mb-3">Checklist</label>
+                                                    <label className="text-xs font-bold uppercase text-slate-400 block mb-3">Checklist</label>
                                                     <div className="flex gap-2 mb-4">
-                                                        <input type="text" className="flex-1 p-3 border border-slate-200 rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
+                                                        <input type="text" className="flex-1 p-3 border rounded-xl text-sm" placeholder="Nova tarefa..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addProjectTask())} />
                                                         <button type="button" onClick={addProjectTask} className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><Icon name="plus" weight="bold"/></button>
                                                     </div>
                                                     <div className="space-y-2">{currentProjectTasks.map(task => (
@@ -809,48 +587,40 @@
                                                 </div>
                                             </>
                                         )}
-                                        {modalType === 'client' && (
-                                            <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Empresa</label><input required className="w-full p-3 border border-slate-200 rounded-xl font-bold" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} /></div>
-                                            </>
-                                        )}
+                                        
+                                        {/* RESTAURAÇÃO: FORM FINANCEIRO ORIGINAL */}
                                         {modalType === 'finance' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Tipo</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Data</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Tipo</label><select className="w-full p-3 border rounded-xl bg-white" value={financeForm.type} onChange={e => setFinanceForm({...financeForm, type: e.target.value})}><option>Receita</option><option>Despesa</option></select></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Data</label><input type="date" required className="w-full p-3 border rounded-xl" value={financeForm.date} onChange={e => setFinanceForm({...financeForm, date: e.target.value})} /></div>
                                                 </div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Descrição</label><input required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Valor</label><input type="number" required className="w-full p-3 border border-slate-200 rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Descrição</label><input required className="w-full p-3 border rounded-xl" value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold uppercase text-slate-400 block mb-1">Valor</label><input type="number" required className="w-full p-3 border rounded-xl" value={financeForm.value} onChange={e => setFinanceForm({...financeForm, value: e.target.value})} /></div>
                                             </>
                                         )}
-                                        {modalType === 'hosting' && (
-                                            <>
-                                                <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">URL</label><input className="w-full p-3 border border-slate-200 rounded-xl font-mono text-indigo-600" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} placeholder="https://..." /></div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Data Expiração</label><input type="date" className="w-full p-3 border border-slate-200 rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div>
-                                                </div>
-                                            </>
-                                        )}
-                                        {modalType === 'manual' && (
-                                            <>
-                                                <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-slate-400 uppercase">Manual</label><button type="button" onClick={generateManualTemplate} className="text-[10px] font-bold text-indigo-600">GERAR TEMPLATE</button></div>
-                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-sm h-96 resize-none" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})}></textarea>
-                                            </>
-                                        )}
+
                                         {modalType === 'contract' && (
                                             <>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Cliente</label><select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
-                                                    <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Projeto</label><select required className="w-full p-3 border border-slate-200 rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}><option value="">Selecione...</option>{projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Cliente</label><select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.client_id} onChange={e => setContractForm({...contractForm, client_id: e.target.value})}><option value="">Selecione...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}</select></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Projeto</label><select required className="w-full p-3 border rounded-xl bg-white font-bold" value={contractForm.project_id} onChange={e => setContractForm({...contractForm, project_id: e.target.value})}><option value="">Selecione...</option>{projects.filter(p => !contractForm.client_id || p.client_id == contractForm.client_id).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
                                                 </div>
-                                                <div className="flex justify-between items-center mb-2 mt-4"><label className="text-xs font-bold text-slate-400 uppercase">Minuta</label><button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">GERAR MINUTA</button></div>
-                                                <textarea className="w-full p-4 border border-slate-200 rounded-xl font-mono text-xs h-80 resize-none" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})}></textarea>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Data Início</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.start_date} onChange={e => setContractForm({...contractForm, start_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Data Fim</label><input type="date" className="w-full p-3 border rounded-xl" value={contractForm.end_date} onChange={e => setContractForm({...contractForm, end_date: e.target.value})} /></div>
+                                                    <div><label className="text-xs font-bold uppercase text-slate-400">Valor (R$)</label><input type="number" className="w-full p-3 border rounded-xl" value={contractForm.value} onChange={e => setContractForm({...contractForm, value: e.target.value})} /></div>
+                                                </div>
+                                                <div className="flex justify-between items-center mb-2 mt-4"><label className="text-xs font-bold uppercase text-slate-400">Minuta Jurídica</label><button type="button" onClick={generateLegalContract} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Gerar Minuta</button></div>
+                                                <textarea className="w-full p-4 border rounded-xl font-mono text-xs h-80 resize-none" value={contractForm.content} onChange={e => setContractForm({...contractForm, content: e.target.value})}></textarea>
                                             </>
                                         )}
+
+                                        {modalType === 'hosting' && (<><div><label className="text-xs font-bold uppercase text-slate-400">URL</label><input className="w-full p-3 border rounded-xl" value={hostingForm.hosting_url} onChange={e => setHostingForm({...hostingForm, hosting_url: e.target.value})} /></div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold uppercase text-slate-400">Vencimento</label><input type="date" className="w-full p-3 border rounded-xl" value={hostingForm.expiration_date} onChange={e => setHostingForm({...hostingForm, expiration_date: e.target.value})} /></div></div></>)}
+                                        {modalType === 'client' && (<><div><label className="text-xs font-bold uppercase text-slate-400">Empresa</label><input required className="w-full p-3 border rounded-xl font-bold" value={clientForm.company} onChange={e => setClientForm({...clientForm, company: e.target.value})} /></div><div><label className="text-xs font-bold uppercase text-slate-400">CNPJ</label><input className="w-full p-3 border rounded-xl" value={clientForm.cnpj_cpf} onChange={e => setClientForm({...clientForm, cnpj_cpf: e.target.value})} /></div></>) }
+                                        {modalType === 'manual' && (<><textarea className="w-full p-4 border rounded-xl font-mono text-sm h-96" value={manualForm.content} onChange={e => setManualForm({...manualForm, content: e.target.value})}></textarea></>)}
                                     </div>
-                                    <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex gap-3 flex-none"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase">Cancelar</button><button type="submit" className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg text-xs uppercase flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button></div>
+                                    <div className="p-6 border-t bg-white flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-xl text-xs uppercase">Cancelar</button><button type="submit" className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg text-xs uppercase flex justify-center items-center gap-2"><Icon name="check" weight="bold"/> Salvar</button></div>
                                 </form>
                             </div>
                         </div>
