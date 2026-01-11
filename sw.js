@@ -16,16 +16,22 @@ const urlsToCache = [
 // INSTALL - Cacheia recursos essenciais
 self.addEventListener('install', (event) => {
     console.log('🔧 Service Worker instalando...');
-    self.skipWaiting(); // Ativa imediatamente
+    self.skipWaiting();
 
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('📦 Cacheando recursos...');
-                return cache.addAll(urlsToCache);
+                // Cacheia recursos um por um para não falhar se algum der erro
+                return Promise.allSettled(
+                    urlsToCache.map(url => 
+                        cache.add(url).catch(err => {
+                            console.warn('⚠️ Falha ao cachear:', url, err);
+                        })
+                    )
+                );
             })
-            .then(() => console.log('✅ Cache criado com sucesso!'))
-            .catch(err => console.error('❌ Erro ao cachear:', err))
+            .then(() => console.log('✅ Cache criado!'))
     );
 });
 
@@ -45,7 +51,7 @@ self.addEventListener('activate', (event) => {
             );
         }).then(() => {
             console.log('✅ Service Worker ativo!');
-            return self.clients.claim(); // Assume controle imediatamente
+            return self.clients.claim();
         })
     );
 });
@@ -54,21 +60,54 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Sempre buscar Firebase/Google APIs online (não cachear)
+    // Firebase/Google APIs: sempre online (não cachear dados do Firebase)
     if (url.hostname.includes('firebaseio.com') || 
-        url.hostname.includes('googleapis.com') ||
-        url.hostname.includes('gstatic.com') ||
-        url.hostname.includes('firebasestorage.googleapis.com')) {
-        event.respondWith(fetch(event.request));
+        url.hostname.includes('firebasestorage') ||
+        url.hostname.includes('identitytoolkit') ||
+        url.pathname.includes('firebase')) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                // Se offline, retorna resposta vazia JSON para evitar erro
+                return new Response('{"offline": true}', {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            })
+        );
         return;
     }
 
-    // Para navegação (HTML): Network First com fallback para cache
+    // Para CDNs e recursos externos: Cache First com Network Fallback
+    if (url.hostname.includes('cdn.') || 
+        url.hostname.includes('unpkg.com') || 
+        url.hostname.includes('googleapis.com') ||
+        url.hostname.includes('gstatic.com')) {
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) {
+                    return cached;
+                }
+                return fetch(event.request).then(response => {
+                    if (response && response.status === 200) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return response;
+                }).catch(err => {
+                    console.warn('⚠️ Offline e sem cache para:', event.request.url);
+                    return cached; // Retorna cache mesmo se antigo
+                });
+            })
+        );
+        return;
+    }
+
+    // Para HTML (navegação): Network First com Cache Fallback
     if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request)
                 .then(response => {
-                    // Atualiza o cache com a versão mais recente
                     const responseClone = response.clone();
                     caches.open(CACHE_NAME).then(cache => {
                         cache.put(event.request, responseClone);
@@ -76,7 +115,6 @@ self.addEventListener('fetch', (event) => {
                     return response;
                 })
                 .catch(() => {
-                    // Se offline, serve do cache
                     return caches.match(event.request).then(cached => {
                         return cached || caches.match('./index.html');
                     });
@@ -85,18 +123,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Para outros recursos (CSS, JS, imagens): Cache First com fallback para Network
+    // Para outros recursos: Cache First
     event.respondWith(
         caches.match(event.request)
             .then(cached => {
                 if (cached) {
-                    return cached; // Retorna do cache se existir
+                    return cached;
                 }
 
-                // Se não está em cache, busca na rede e cacheia
                 return fetch(event.request).then(response => {
-                    // Só cacheia respostas válidas
-                    if (!response || response.status !== 200 || response.type === 'error') {
+                    if (!response || response.status !== 200) {
                         return response;
                     }
 
@@ -106,11 +142,9 @@ self.addEventListener('fetch', (event) => {
                     });
 
                     return response;
+                }).catch(() => {
+                    console.warn('⚠️ Recurso não disponível offline:', event.request.url);
                 });
-            })
-            .catch(() => {
-                // Fallback em caso de erro
-                console.log('⚠️ Falha ao buscar:', event.request.url);
             })
     );
 });
