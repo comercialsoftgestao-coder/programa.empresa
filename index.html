@@ -4,6 +4,72 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
+
+    <!-- PWA IMPLEMENTATION VIA BLOB (Instalação WebAPK Android) -->
+    <script>
+        (function() {
+            // Manifest dinâmico
+            const manifest = {
+                "name": "SOFTGESTÃO - Sistema Administrativo",
+                "short_name": "SoftGestão",
+                "description": "Sistema de Gestão Administrativa e Monitoramento de Projetos",
+                "start_url": "./",
+                "scope": "/",
+                "display": "standalone",
+                "orientation": "portrait",
+                "background_color": "#f8fafc",
+                "theme_color": "#4f46e5",
+                "icons": [
+                    {
+                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+                        "sizes": "192x192",
+                        "type": "image/svg+xml",
+                        "purpose": "any maskable"
+                    },
+                    {
+                        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%234f46e5'/%3E%3Cpath d='M160 150l100 106-100 106m120-212l100 106-100 106' stroke='white' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+                        "sizes": "512x512",
+                        "type": "image/svg+xml",
+                        "purpose": "any maskable"
+                    }
+                ]
+            };
+
+            // Criar Blob do manifest e injetar no DOM
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            const linkManifest = document.createElement('link');
+            linkManifest.rel = 'manifest';
+            linkManifest.href = manifestURL;
+            document.head.appendChild(linkManifest);
+
+            // Meta tags PWA
+            const metaTheme = document.createElement('meta');
+            metaTheme.name = 'theme-color';
+            metaTheme.content = '#4f46e5';
+            document.head.appendChild(metaTheme);
+
+            const metaMobile = document.createElement('meta');
+            metaMobile.name = 'mobile-web-app-capable';
+            metaMobile.content = 'yes';
+            document.head.appendChild(metaMobile);
+
+            const metaApple = document.createElement('meta');
+            metaApple.name = 'apple-mobile-web-app-capable';
+            metaApple.content = 'yes';
+            document.head.appendChild(metaApple);
+
+            const metaAppleStatus = document.createElement('meta');
+            metaAppleStatus.name = 'apple-mobile-web-app-status-bar-style';
+            metaAppleStatus.content = 'black-translucent';
+            document.head.appendChild(metaAppleStatus);
+
+            const metaAppleTitle = document.createElement('meta');
+            metaAppleTitle.name = 'apple-mobile-web-app-title';
+            metaAppleTitle.content = 'SoftGestão';
+            document.head.appendChild(metaAppleTitle);
+        })();
+    </script>
     
     <!-- PWA IMPLEMENTATION VIA BLOB (Suporte total a Modo Avião) -->
     <script>
@@ -133,29 +199,6 @@
             #print-area-container, #print-area-container * { visibility: visible; }
             #print-area-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 40px; }
             .no-print { display: none !important; }
-        }
-    </style>
-
-    <!-- PWA Configuration -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4f46e5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="SoftGestão">
-    <meta name="description" content="Sistema completo de gestão administrativa e monitoramento de projetos">
-
-    <!-- Detectar modo PWA e ajustar viewport -->
-    <style>
-        @media all and (display-mode: standalone) {
-            body {
-                overscroll-behavior-y: contain;
-            }
-            /* Garantir que modais funcionem no modo standalone */
-            .modal-backdrop {
-                position: fixed !important;
-                z-index: 9999 !important;
-            }
         }
     </style>
 </head>
