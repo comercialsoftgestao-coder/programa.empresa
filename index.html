@@ -96,7 +96,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Ativando Persistência Offline
+        // Ativando Persistência Offline (Regra para Modo Avião funcionar no Android/iPhone)
         enableIndexedDbPersistence(db).catch((err) => {
             console.warn("Persistence Error:", err.code);
         });
@@ -140,6 +140,7 @@
         // --- UTILITY PARA CORREÇÃO DE DATA ---
         const formatDateDisplay = (dateStr) => {
             if (!dateStr) return '---';
+            // Garante que a data string YYYY-MM-DD seja lida como UTC para evitar erro de fuso horário
             return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
         };
 
@@ -153,12 +154,12 @@
 
             const [projects, setProjects] = useState([]);
             const [clients, setClients] = useState([]);
-            const [contracts, setContracts] = useState([]); 
+            const [contracts, setContracts] = useState([]); // Orçamentos/Contratos
             const [financial, setFinancial] = useState([]);
             
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [searchTerm, setSearchTerm] = useState(''); 
+            const [searchTerm, setSearchTerm] = useState(''); // ESTADO DE PESQUISA
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
@@ -185,7 +186,7 @@
 
             // STATE PARA MONITORAMENTO DIÁRIO
             const [dailyChecks, setDailyChecks] = useState({});
-            // Status Automático dos Projetos (checking, online, offline)
+            // NOVO STATE: Status Automático dos Projetos (checking, online, offline)
             const [projectStatus, setProjectStatus] = useState({});
 
             const toggleDailyCheck = (id) => {
@@ -210,13 +211,14 @@
                 client_id: '', project_id: '', title: '', start_date: '', end_date: '', value: '', content: '', status: 'Rascunho' 
             });
             
-            // TAREFAS DO PROJETO
+            // TAREFAS DO PROJETO (NOVO)
             const [currentProjectTasks, setCurrentProjectTasks] = useState([]);
             const [newTaskText, setNewTaskText] = useState('');
 
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
             const showToast = (msg, type = 'info') => { setToast({ show: true, message: msg, type }); setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 3000); };
 
+            // Resetar pesquisa ao trocar de aba
             useEffect(() => {
                 setSearchTerm('');
             }, [activeTab]);
@@ -225,12 +227,15 @@
             const checkProjectHealth = async (url) => {
                 if (!navigator.onLine) return 'offline'; // Se meu aparelho está offline, não tenta pingar
                 if (!url) return 'offline';
+                // Adiciona https se não tiver
                 let formattedUrl = url.startsWith('http') ? url : `https://${url}`;
                 
                 try {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 8000); 
+
                     await fetch(formattedUrl, { mode: 'no-cors', signal: controller.signal, cache: "no-store" });
+                    
                     clearTimeout(timeoutId);
                     return 'online';
                 } catch (error) {
@@ -239,11 +244,13 @@
                 }
             };
 
+            // EFEITO: RODAR VERIFICAÇÃO AUTOMÁTICA AO ENTRAR NA ABA MONITORAMENTO
             useEffect(() => {
                 if (activeTab === 'monitoring') {
                     const runChecks = async () => {
                         const projectsToMonitor = projects.filter(p => p.hosting_url);
                         
+                        // Marca todos como "verificando" se ainda não tiverem status
                         const initialStatuses = {};
                         let needsUpdate = false;
                         projectsToMonitor.forEach(p => {
@@ -257,10 +264,13 @@
                             setProjectStatus(prev => ({ ...prev, ...initialStatuses }));
                         }
 
+                        // Roda verificação em paralelo
                         projectsToMonitor.forEach(async (p) => {
                             if (projectStatus[p.id] !== 'online' && projectStatus[p.id] !== 'offline') {
                                 const status = await checkProjectHealth(p.hosting_url);
                                 setProjectStatus(prev => ({ ...prev, [p.id]: status }));
+                                
+                                // Auto-marca o checklist diário se estiver online
                                 if (status === 'online') {
                                     setDailyChecks(prev => ({...prev, [p.id]: true}));
                                 }
@@ -271,14 +281,18 @@
                 }
             }, [activeTab, projects]);
 
+            // Botão para forçar re-verificação
             const forceRecheckAll = () => {
                 if (!navigator.onLine) { showToast("Sem conexão para verificar sites.", "error"); return; }
-                setProjectStatus({}); 
+                setProjectStatus({}); // Limpa status
                 const projectsToMonitor = projects.filter(p => p.hosting_url);
+                
+                // Seta tudo para checking visualmente
                 const checkingState = {};
                 projectsToMonitor.forEach(p => checkingState[p.id] = 'checking');
                 setProjectStatus(checkingState);
 
+                // Dispara
                 projectsToMonitor.forEach(async (p) => {
                     const status = await checkProjectHealth(p.hosting_url);
                     setProjectStatus(prev => ({ ...prev, [p.id]: status }));
@@ -287,16 +301,21 @@
                 showToast('Iniciando verificação completa...', 'info');
             };
 
+
+            // CARREGAMENTO INICIAL DO FIREBASE
             useEffect(() => {
                 const fetchAllData = async () => {
                     setLoading(true);
                     try {
                         const projectsSnap = await getDocs(collection(db, "projects"));
                         setProjects(projectsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const clientsSnap = await getDocs(collection(db, "clients"));
                         setClients(clientsSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const financeSnap = await getDocs(collection(db, "financial"));
                         setFinancial(financeSnap.docs.map(d => ({id: d.id, ...d.data()})));
+
                         const contractsSnap = await getDocs(collection(db, "contracts"));
                         setContracts(contractsSnap.docs.map(d => ({id: d.id, ...d.data()})));
                     } catch (err) {
@@ -309,12 +328,14 @@
                 fetchAllData();
             }, []);
 
+            // PERSISTÊNCIA LOCAL APENAS PARA CONFIG (OPCIONAL)
             useEffect(() => {
                 if (!loading) {
                     localStorage.setItem('softgestao_userdata', JSON.stringify(userData));
                 }
             }, [userData, loading]);
 
+            // Cálculo das estatísticas (Stats)
             const stats = useMemo(() => {
                 const totalIncome = financial.filter(f => f.type === 'Receita' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
                 const totalExpense = financial.filter(f => f.type === 'Despesa' && f.status === 'Pago').reduce((a, b) => a + (b.value || 0), 0);
@@ -324,6 +345,7 @@
                 return { totalIncome, totalExpense, balance: totalIncome - totalExpense, activeProjects, pipelineValue, supportClients };
             }, [financial, projects]);
 
+            // GRÁFICO DASHBOARD
             useEffect(() => {
                 if (activeTab === 'dashboard' && chartRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
@@ -666,7 +688,7 @@
                                 <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
                                     <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div><h2 className="text-xl font-bold text-slate-800">Carteira de Clientes</h2></div><button onClick={() => openModal('client')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all"><Icon name="plus" weight="bold"/> Adicionar Cliente</button></div>
                                     <Card className="overflow-hidden"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider"><tr><th className="p-5">Empresa</th><th className="p-5">Contato</th><th className="p-5 text-center">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">
-                                        {clients.map(c => (<tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold"><td className="p-5">{c.company}</td><td className="p-5">{c.name}</td><td className="p-5 flex justify-center gap-2"><button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg"><Icon name="trash" weight="bold"/></button></td></tr>))}
+                                        {clients.map(c => (<tr key={c.id} className="hover:bg-slate-50 transition-colors text-sm font-semibold"><td className="p-5">{c.company}</td><td className="p-5">{c.name}</td><td className="p-5 flex justify-center gap-2"><button onClick={() => openModal('client', c)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-all"><Icon name="pencil-simple" weight="bold"/></button><button onClick={() => deleteItem(c.id, clients, setClients)} className="p-2 hover:bg-rose-50 text-rose-500 rounded-lg transition-all"><Icon name="trash" weight="bold"/></button></td></tr>))}
                                     </tbody></table></Card>
                                 </div>
                             )}
@@ -770,9 +792,9 @@
                                                         </select>
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Tipo</label>
-                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.type} onChange={e => setProjectForm({...projectForm, type: e.target.value})}>
-                                                            <option>Website</option><option>Loja Online</option><option>Sistema Web</option>
+                                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Pagamento</label>
+                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.payment_method} onChange={e => setProjectForm({...projectForm, payment_method: e.target.value})}>
+                                                            <option>Pix</option><option>Cartão</option><option>Dinheiro</option>
                                                         </select>
                                                     </div>
                                                 </div>
@@ -782,12 +804,6 @@
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div><label className="text-xs font-bold text-slate-400 uppercase block mb-1">Prazo</label><input type="date" required className="w-full p-3 border border-slate-200 rounded-xl" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} /></div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Pagamento</label>
-                                                        <select className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={projectForm.payment_method} onChange={e => setProjectForm({...projectForm, payment_method: e.target.value})}>
-                                                            <option>Pix</option><option>Cartão</option><option>Dinheiro</option>
-                                                        </select>
-                                                    </div>
                                                 </div>
                                                 <div className="pt-4 border-t border-slate-100">
                                                     <label className="text-xs font-bold text-slate-400 uppercase block mb-3">Tarefas</label>
