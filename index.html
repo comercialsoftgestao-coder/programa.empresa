@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4338ca">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SoftGestão">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2920/2920277.png">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
     
     <!-- Tailwind CSS -->
@@ -60,7 +67,213 @@
     </style>
 </head>
 <body class="bg-pattern-tech text-slate-800">
+
+    <!-- Central de Instalação iOS -->
+    <div id="ios-install-prompt" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999; max-width:90%; width:400px;">
+        <div style="background:linear-gradient(135deg, #4338ca 0%, #6366f1 100%); color:white; padding:20px; border-radius:16px; box-shadow:0 10px 40px rgba(67,56,202,0.4); border:2px solid rgba(255,255,255,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:40px; height:40px; background:rgba(255,255,255,0.2); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <i class="ph-fill ph-code" style="font-size:24px;"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:bold; font-size:14px;">Instalar SoftGestão</div>
+                        <div style="font-size:11px; opacity:0.8;">App disponível para instalação</div>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('ios-install-prompt').style.display='none'; localStorage.setItem('ios-prompt-closed', 'true');" style="background:transparent; border:none; color:white; cursor:pointer; opacity:0.7; font-size:20px; padding:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">
+                    ✕
+                </button>
+            </div>
+            <div style="background:rgba(255,255,255,0.15); padding:12px; border-radius:10px; font-size:12px; line-height:1.6; margin-bottom:12px;">
+                <div style="font-weight:bold; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:18px;">📱</span> Como instalar:
+                </div>
+                <div style="opacity:0.95;">
+                    1. Toque no botão <strong style="display:inline-flex; align-items:center; padding:2px 6px; background:rgba(255,255,255,0.2); border-radius:4px; margin:0 3px;">⬆️ Compartilhar</strong> abaixo<br>
+                    2. Role e toque em <strong>"Adicionar à Tela de Início"</strong><br>
+                    3. Confirme tocando em <strong>"Adicionar"</strong>
+                </div>
+            </div>
+            <div style="text-align:center; font-size:10px; opacity:0.7;">
+                ✨ Acesso rápido e experiência completa de app
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de Detecção iOS -->
+    <script>
+        (function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                                window.navigator.standalone === true;
+            const promptClosed = localStorage.getItem('ios-prompt-closed');
+
+            if (isIOS && !isStandalone && !promptClosed) {
+                setTimeout(function() {
+                    document.getElementById('ios-install-prompt').style.display = 'block';
+
+                    setTimeout(function() {
+                        const prompt = document.getElementById('ios-install-prompt');
+                        if (prompt && prompt.style.display !== 'none') {
+                            prompt.style.opacity = '0';
+                            prompt.style.transition = 'opacity 0.5s';
+                            setTimeout(function() {
+                                prompt.style.display = 'none';
+                            }, 500);
+                        }
+                    }, 15000);
+                }, 2000);
+            }
+        })();
+    </script>
     <div id="root"></div>
+
+    
+    <!-- PWA Manifest Implementation -->
+    <script>
+        const manifestData = {
+            "name": "SOFTGESTÃO - Sistema Administrativo",
+            "short_name": "SoftGestão",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#f8fafc",
+            "theme_color": "#4338ca",
+            "description": "Sistema completo de gestão administrativa para projetos web",
+            "icons": [
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2920/2920277.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "any maskable"
+                }
+            ]
+        };
+
+        const stringManifest = JSON.stringify(manifestData);
+        const blob = new Blob([stringManifest], { type: 'application/json' });
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+    </script>
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'softgestao-v1-2026';
+                    const urlsToCache = [
+                        './',
+                        location.href,
+                        'https://cdn.tailwindcss.com',
+                        'https://unpkg.com/react@18/umd/react.production.min.js',
+                        'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+                        'https://unpkg.com/@babel/standalone/babel.min.js',
+                        'https://cdn.jsdelivr.net/npm/chart.js',
+                        'https://unpkg.com/phosphor-icons@1.4.2/web',
+                        'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap'
+                    ];
+
+                    self.addEventListener('install', (event) => {
+                        self.skipWaiting();
+                        event.waitUntil(
+                            caches.open(CACHE_NAME).then(cache => {
+                                return cache.addAll(urlsToCache);
+                            })
+                        );
+                    });
+
+                    self.addEventListener('activate', (event) => {
+                        event.waitUntil(
+                            caches.keys().then(cacheNames => {
+                                return Promise.all(
+                                    cacheNames.map(cache => {
+                                        if (cache !== CACHE_NAME) {
+                                            return caches.delete(cache);
+                                        }
+                                    })
+                                );
+                            }).then(() => self.clients.claim())
+                        );
+                    });
+
+                    self.addEventListener('fetch', (event) => {
+                        const url = new URL(event.request.url);
+
+                        if (url.hostname.includes('firebaseio.com') || 
+                            url.hostname.includes('googleapis.com') ||
+                            url.hostname.includes('gstatic.com')) {
+                            event.respondWith(fetch(event.request));
+                            return;
+                        }
+
+                        if (event.request.mode === 'navigate') {
+                            event.respondWith(
+                                fetch(event.request)
+                                    .then(response => {
+                                        const copy = response.clone();
+                                        caches.open(CACHE_NAME).then(cache => {
+                                            cache.put(event.request, copy);
+                                        });
+                                        return response;
+                                    })
+                                    .catch(() => {
+                                        return caches.match(event.request).then(cached => {
+                                            return cached || caches.match('./');
+                                        });
+                                    })
+                            );
+                            return;
+                        }
+
+                        event.respondWith(
+                            caches.match(event.request).then(response => {
+                                return response || fetch(event.request).then(fetchResponse => {
+                                    return caches.open(CACHE_NAME).then(cache => {
+                                        cache.put(event.request, fetchResponse.clone());
+                                        return fetchResponse;
+                                    });
+                                });
+                            })
+                        );
+                    });
+                `;
+
+                try {
+                    const swBlob = new Blob([swCode], { type: 'text/javascript' });
+                    const swUrl = URL.createObjectURL(swBlob);
+
+                    navigator.serviceWorker.register(swUrl).then(reg => {
+                        reg.update();
+
+                        navigator.serviceWorker.getRegistrations().then(registrations => {
+                            registrations.forEach(registration => {
+                                if (registration !== reg) {
+                                    registration.unregister();
+                                }
+                            });
+                        });
+
+                        caches.keys().then(cacheNames => {
+                            cacheNames.forEach(cacheName => {
+                                if (cacheName !== 'softgestao-v1-2026') {
+                                    caches.delete(cacheName);
+                                }
+                            });
+                        });
+                    }).catch(err => {
+                        if (!err.message.includes('protocol')) {
+                            console.error('SW Error:', err);
+                        }
+                    });
+                } catch (e) {
+                    console.log('SW not supported');
+                }
+            });
+        }
+    </script>
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
