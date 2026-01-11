@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOFTGESTÃO - Sistema Administrativo</title>
     
+    <!-- PWA Meta Tags para Mobile -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/606/606548.png">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -58,6 +64,72 @@
             .no-print { display: none !important; }
         }
     </style>
+
+    <!-- Implementação PWA via Blobs (Conforme Documentação) -->
+    <script>
+        (function() {
+            // 1. Definição do Manifesto Dinâmico
+            const manifest = {
+                name: "SOFTGESTÃO - Admin",
+                short_name: "SoftGestão",
+                description: "Sistema Administrativo SoftGestão",
+                start_url: ".",
+                display: "standalone",
+                orientation: "portrait",
+                background_color: "#f8fafc",
+                theme_color: "#4f46e5",
+                icons: [
+                    {
+                        src: "https://cdn-icons-png.flaticon.com/512/606/606548.png",
+                        sizes: "512x512",
+                        type: "image/png",
+                        purpose: "any maskable"
+                    }
+                ]
+            };
+
+            // Conversão para Blob e Injeção do link manifest
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = manifestURL;
+            document.head.appendChild(manifestLink);
+
+            // 2. Implementação do Service Worker via Blob
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    const CACHE_NAME = 'softgestao-cache-v1';
+                    const ASSETS = [window.location.href];
+
+                    self.addEventListener('install', (event) => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+                        );
+                    });
+
+                    self.addEventListener('fetch', (event) => {
+                        event.respondWith(
+                            caches.match(event.request).then((response) => {
+                                return response || fetch(event.request);
+                            })
+                        );
+                    });
+                `;
+                
+                const swBlob = new Blob([swCode], {type: 'text/javascript'});
+                const swURL = URL.createObjectURL(swBlob);
+                
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register(swURL).then((reg) => {
+                        console.log('PWA: Service Worker registrado com sucesso via Blob.');
+                    }).catch((err) => {
+                        console.warn('PWA: Erro ao registrar Service Worker:', err);
+                    });
+                });
+            }
+        })();
+    </script>
 </head>
 <body class="bg-pattern-tech text-slate-800">
     <div id="root"></div>
